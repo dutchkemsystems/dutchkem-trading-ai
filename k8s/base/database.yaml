@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: fortress-postgres
+  namespace: dutchkem
+spec:
+  serviceName: fortress-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fortress-postgres
+  template:
+    metadata:
+      labels:
+        app: fortress-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: dutchkem
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: fortress-secrets
+                  key: postgres-password
+            - name: POSTGRES_DB
+              value: dutchkem_fortress
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: pgdata
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: gp3
+        resources:
+          requests:
+            storage: 50Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fortress-postgres
+  namespace: dutchkem
+spec:
+  selector:
+    app: fortress-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: fortress-redis
+  namespace: dutchkem
+spec:
+  serviceName: fortress-redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fortress-redis
+  template:
+    metadata:
+      labels:
+        app: fortress-redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fortress-redis
+  namespace: dutchkem
+spec:
+  selector:
+    app: fortress-redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+  type: ClusterIP
