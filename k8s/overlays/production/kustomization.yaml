@@ -1,0 +1,44 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: dutchkem
+
+resources:
+  - ../../base
+
+patches:
+  - target:
+      kind: Deployment
+      name: fortress-api
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: fortress-api-hpa
+    patch: |
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+      - op: replace
+        path: /spec/maxReplicas
+        value: 20
+
+images:
+  - name: dutchkem/fortress-api
+    newName: dutchkem/fortress-api
+    newTag: latest
+  - name: dutchkem/fortress-admin
+    newName: dutchkem/fortress-admin
+    newTag: latest
+
+configMapGenerator:
+  - name: fortress-config
+    literals:
+      - ENVIRONMENT=production
+      - REGION=africa
+      - COMPLIANCE_REGIME=ndpa
+      - DEFAULT_CURRENCY=NGN
+      - CLUSTER=aws-cape-town
+      - LOG_LEVEL=info
