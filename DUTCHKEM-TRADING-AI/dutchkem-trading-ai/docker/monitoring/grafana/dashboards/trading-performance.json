@@ -1,0 +1,82 @@
+# Grafana Dashboard — Trading Performance
+
+{
+  "dashboard": {
+    "id": null,
+    "title": "Trading Performance",
+    "tags": ["dutchkem", "trading", "performance"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "title": "Signals by Timeframe",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "sum(signals_generated_total) by (timeframe)",
+            "legendFormat": "{{timeframe}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 }
+      },
+      {
+        "title": "Signal Strength Distribution",
+        "type": "histogram",
+        "targets": [
+          {
+            "expr": "signal_strength_bucket",
+            "legendFormat": "{{le}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 }
+      },
+      {
+        "title": "Active Trades",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "trades_active_total",
+            "legendFormat": "Active Trades",
+            "refId": "A"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 }
+      },
+      {
+        "title": "Win Rate",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "trades_won_total / (trades_won_total + trades_lost_total) * 100",
+            "legendFormat": "Win Rate %",
+            "refId": "A"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+      },
+      {
+        "title": "Risk Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "risk_daily_loss_percent",
+            "legendFormat": "Daily Loss %",
+            "refId": "A"
+          },
+          {
+            "expr": "risk_drawdown_percent",
+            "legendFormat": "Drawdown %",
+            "refId": "B"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }
+      }
+    ],
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "refresh": "10s"
+  }
+}

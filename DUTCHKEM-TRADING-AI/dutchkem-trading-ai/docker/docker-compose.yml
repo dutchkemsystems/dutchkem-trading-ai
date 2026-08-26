@@ -1,0 +1,156 @@
+version: '3.8'
+
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    container_name: dutchkem_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dutchkem_trading
+      POSTGRES_USER: dutchkem_admin
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-dutchkem_secure_2024}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dutchkem_admin -d dutchkem_trading"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: dutchkem_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: dutchkem_influxdb
+    restart: unless-stopped
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_PASSWORD:-dutchkem_influx_2024}
+      DOCKER_INFLUXDB_INIT_ORG: dutchkem
+      DOCKER_INFLUXDB_INIT_BUCKET: trading_data
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: dutchkem_rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: dutchkem
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-dutchkem_mq_2024}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: dutchkem_backend
+    restart: unless-stopped
+    environment:
+      - DEBUG=1
+      - SECRET_KEY=${SECRET_KEY:-dutchkem-secret-key-change-in-production}
+      - DATABASE_URL=postgresql://dutchkem_admin:${DB_PASSWORD:-dutchkem_secure_2024}@db:5432/dutchkem_trading
+      - REDIS_URL=redis://redis:6379/0
+      - INFLUXDB_URL=http://influxdb:8086
+      - RABBITMQ_URL=amqp://dutchkem:${RABBITMQ_PASSWORD:-dutchkem_mq_2024}@rabbitmq:5672/
+      - MT5_HOST=host.docker.internal
+      - MT5_PORT=3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      influxdb:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+    volumes:
+      - ../backend:/app
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+
+  celery_worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: dutchkem_celery
+    restart: unless-stopped
+    command: celery -A config worker -l info -c 4
+    environment:
+      - DEBUG=1
+      - SECRET_KEY=${SECRET_KEY:-dutchkem-secret-key-change-in-production}
+      - DATABASE_URL=postgresql://dutchkem_admin:${DB_PASSWORD:-dutchkem_secure_2024}@db:5432/dutchkem_trading
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://dutchkem:${RABBITMQ_PASSWORD:-dutchkem_mq_2024}@rabbitmq:5672/
+    depends_on:
+      - db
+      - redis
+      - rabbitmq
+    volumes:
+      - ../backend:/app
+
+  celery_beat:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: dutchkem_celery_beat
+    restart: unless-stopped
+    command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    environment:
+      - DEBUG=1
+      - SECRET_KEY=${SECRET_KEY:-dutchkem-secret-key-change-in-production}
+      - DATABASE_URL=postgresql://dutchkem_admin:${DB_PASSWORD:-dutchkem_secure_2024}@db:5432/dutchkem_trading
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+      - rabbitmq
+    volumes:
+      - ../backend:/app
+
+  nginx:
+    image: nginx:alpine
+    container_name: dutchkem_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+      - ./nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:
+  influxdb_data:
+  rabbitmq_data:
+  static_volume:
+  media_volume:

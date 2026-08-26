@@ -1,0 +1,59 @@
+# Django Core
+Django==4.2.8
+djangorestframework==3.14.0
+django-cors-headers==4.3.1
+django-filter==23.5
+
+# Authentication
+djangorestframework-simplejwt==5.3.1
+django-otp==1.2.4
+qrcode==7.4.2
+
+# Database
+psycopg2-binary==2.9.9
+django-timescaledb==0.2.8
+redis==5.0.1
+
+# Celery
+celery==5.3.6
+django-celery-beat==2.5.0
+django-celery-results==2.5.1
+kombu==5.3.5
+
+# WebSocket
+channels==4.0.0
+channels-redis==4.1.0
+daphne==4.0.0
+
+# InfluxDB
+influxdb-client==1.38.0
+
+# API & Serialization
+drf-yasg==1.21.7
+django-rest-framework-simplejwt==0.0.2
+
+# Security
+cryptography==41.0.7
+django-ratelimit==4.1.0
+
+# Payment Gateways
+stripe==7.12.0
+paystack-sdk==0.1.0
+python-dotenv==1.0.0
+
+# Trading & Finance
+pandas==2.1.4
+numpy==1.26.2
+ta==0.11.0
+yfinance==0.2.33
+
+# AI & ML
+openai==1.6.1
+langchain==0.0.350
+
+# Utilities
+gunicorn==21.2.0
+whitenoise==6.6.0
+Pillow==10.1.0
+python-dateutil==2.8.2
+pytz==2023.3
