@@ -5,7 +5,7 @@ All pillars route their billing through this service.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +29,14 @@ class WalletNotFoundError(BillingError):
 class BillingService:
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    @staticmethod
+    def calculate_credits_for_usd(usd_amount: float, credit_rate: float = 0.10) -> float:
+        return round(usd_amount / credit_rate, 2)
+
+    @staticmethod
+    def calculate_usd_for_credits(credits: float, credit_rate: float = 0.10) -> float:
+        return round(credits * credit_rate, 2)
 
     async def get_wallet(self, client_id: uuid.UUID) -> ClientWallet:
         result = await self.db.execute(
@@ -148,7 +156,14 @@ class BillingService:
         credit_cost: float,
     ) -> CreditTransaction:
         """Charge credits for a completed agent task execution."""
-        execution = await self.db.get(AgentExecution, execution_id)
+        from sqlalchemy.orm import selectinload
+
+        result = await self.db.execute(
+            select(AgentExecution)
+            .where(AgentExecution.id == execution_id)
+            .options(selectinload(AgentExecution.task).selectinload("agent"))
+        )
+        execution = result.scalar_one_or_none()
         if not execution:
             raise BillingError(f"Execution {execution_id} not found")
 
@@ -208,7 +223,7 @@ class BillingService:
                 "period_end": period_end.isoformat(),
                 "credit_rate_usd": wallet.credit_rate_usd,
             },
-            due_at=datetime.now(timezone.utc).replace(day=min(28, datetime.now(timezone.utc).day + 30)),
+            due_at=datetime.now(timezone.utc) + timedelta(days=30),
         )
         self.db.add(invoice)
         await self.db.flush()

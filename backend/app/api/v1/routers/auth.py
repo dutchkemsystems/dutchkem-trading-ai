@@ -1,7 +1,7 @@
 """Authentication routes."""
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -52,10 +52,10 @@ async def register(req: RegisterRequest):
             name=req.name,
             company=req.company,
             country=req.country,
+            hashed_password=hash_password(req.password),
         )
-        client._hashed_password = hash_password(req.password)
         db.add(client)
-        await db.commit()
+        await db.flush()
         await db.refresh(client)
 
         from app.services.billing import BillingService
@@ -75,7 +75,7 @@ async def login(req: LoginRequest):
         result = await db.execute(select(Client).where(Client.email == req.email))
         client = result.scalar_one_or_none()
 
-        if not client or not verify_password(req.password, getattr(client, "_hashed_password", "")):
+        if not client or not verify_password(req.password, client.hashed_password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials",

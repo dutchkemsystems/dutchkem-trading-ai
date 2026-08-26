@@ -35,7 +35,7 @@ def upgrade() -> None:
         sa.Column("phone", sa.String(50), nullable=True),
         sa.Column("tier", sa.Enum("free", "starter", "growth", "enterprise", name="client_tier"), server_default="free"),
         sa.Column("is_active", sa.Boolean(), server_default="true"),
-        sa.Column("_hashed_password", sa.String(255), nullable=True),
+        sa.Column("hashed_password", sa.String(255), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )

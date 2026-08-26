@@ -113,47 +113,54 @@ def process_auto_topup(client_id: str):
 def meter_agent_execution(execution_id: str, client_id: str, credit_cost: float):
     """Charge credits for a completed agent execution."""
     from app.services.billing import BillingService
+    import asyncio
 
-    with SyncSession() as db:
-        try:
+    async def _charge():
+        from app.core.database import async_session
+        async with async_session() as db:
             billing = BillingService(db)
-            billing.deduct_credits(
+            await billing.deduct_credits(
                 client_id=uuid.UUID(client_id),
                 amount=credit_cost,
                 description="Agent task execution",
                 reference=execution_id,
             )
-            db.commit()
-            logger.info(f"Charged {credit_cost} credits to client {client_id}")
-        except Exception as e:
-            logger.error(f"Failed to charge client {client_id}: {e}")
-            db.rollback()
+            await db.commit()
+
+    asyncio.run(_charge())
+    logger.info(f"Charged {credit_cost} credits to client {client_id}")
 
 
 @shared_task(name="app.workers.tasks.generate_daily_invoices")
 def generate_daily_invoices():
     """Generate invoices for all active clients daily."""
-    from app.services.billing import BillingService
+    import asyncio
 
-    with SyncSession() as db:
+    async def _generate():
+        from app.services.billing import BillingService
+        from app.core.database import async_session
         from app.models.clients import Client
 
-        clients = db.execute(select(Client).where(Client.is_active == True)).scalars().all()
+        async with async_session() as db:
+            result = await db.execute(select(Client).where(Client.is_active == True))
+            clients = result.scalars().all()
 
-        now = datetime.now(timezone.utc)
-        period_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        period_end = now
+            now = datetime.now(timezone.utc)
+            period_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            period_end = now
 
-        for client in clients:
-            try:
-                billing = BillingService(db)
-                invoice = billing.generate_invoice(client.id, period_start, period_end)
-                if invoice.total_usd > 0:
-                    logger.info(f"Generated invoice {invoice.invoice_number} for {client.email}")
-            except Exception as e:
-                logger.error(f"Failed to generate invoice for {client.email}: {e}")
+            for client in clients:
+                try:
+                    billing = BillingService(db)
+                    invoice = await billing.generate_invoice(client.id, period_start, period_end)
+                    if invoice.total_usd > 0:
+                        logger.info(f"Generated invoice {invoice.invoice_number} for {client.email}")
+                except Exception as e:
+                    logger.error(f"Failed to generate invoice for {client.email}: {e}")
 
-        db.commit()
+            await db.commit()
+
+    asyncio.run(_generate())
 
 
 @shared_task(name="app.workers.tasks.process_settlement")

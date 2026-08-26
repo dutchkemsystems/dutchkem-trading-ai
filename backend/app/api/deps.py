@@ -3,9 +3,9 @@
 import uuid
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -14,13 +14,12 @@ from app.models.clients import Client
 
 security = HTTPBearer()
 
-CurrentUser = Annotated[Client, Depends()]
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 
 
-async def get_current_user(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-    db: DbSession,
+async def _get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db),
 ) -> Client:
     token = credentials.credentials
     payload = decode_token(token)
@@ -38,8 +37,6 @@ async def get_current_user(
             detail="Invalid token payload",
         )
 
-    from sqlalchemy import select
-
     result = await db.execute(select(Client).where(Client.id == uuid.UUID(client_id)))
     client = result.scalar_one_or_none()
 
@@ -52,9 +49,12 @@ async def get_current_user(
     return client
 
 
+CurrentUser = Annotated[Client, Depends(_get_current_user)]
+
+
 async def get_current_admin(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
-    db: DbSession,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db),
 ) -> Client:
     payload = decode_token(credentials.credentials)
     if payload is None or payload.get("role") != "admin":
@@ -62,4 +62,4 @@ async def get_current_admin(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required",
         )
-    return await get_current_user(credentials, db)
+    return await _get_current_user(credentials, db)

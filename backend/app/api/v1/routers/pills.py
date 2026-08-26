@@ -143,7 +143,7 @@ async def get_alerts(
 
 
 # ─── Pillar 3: African Agent Cloud ──────────────────────────────────────
-agent_cloud_router = APIRouter(prefix="/agents", tags=["agent-cloud"])
+agent_cloud_router = APIRouter(prefix="/agent-cloud", tags=["agent-cloud"])
 
 
 class DeployRequest(BaseModel):

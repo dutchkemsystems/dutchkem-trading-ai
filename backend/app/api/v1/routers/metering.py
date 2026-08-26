@@ -133,8 +133,13 @@ async def get_usage_stats(
     client: CurrentUser,
     db: DbSession,
 ):
+    from sqlalchemy.orm import selectinload
+    from datetime import datetime, timezone
+
     result = await db.execute(
-        select(AgentExecution).where(AgentExecution.client_id == client.id)
+        select(AgentExecution)
+        .where(AgentExecution.client_id == client.id)
+        .options(selectinload(AgentExecution.task).selectinload("agent"))
     )
     executions = result.scalars().all()
 
@@ -142,7 +147,6 @@ async def get_usage_stats(
     by_agent: dict[str, int] = {}
     today_count = 0
 
-    from datetime import datetime, timezone
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
     for e in executions:
