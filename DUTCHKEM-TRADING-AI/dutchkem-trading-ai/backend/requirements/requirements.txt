@@ -17,6 +17,7 @@ qrcode==7.4.2
 
 # Database
 psycopg2-binary==2.9.9
+dj-database-url==2.1.0
 django-extensions==3.2.3
 
 # Celery
@@ -41,6 +42,10 @@ django-prometheus==2.3.1
 # Task Queue
 kombu==5.3.5
 amqp==5.2.0
+
+# WSGI Server
+gunicorn==21.2.0
+whitenoise==6.6.0
 
 # Utilities
 python-dateutil==2.9.0.post0
