@@ -1,31 +1,22 @@
-# Dutchkem Trading AI — MQL5 Code Generator
-# Generates Expert Advisor code for MetaTrader 5
-
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 from datetime import datetime
 
 
 class MQL5CodeGenerator:
     """
-    Generate MQL5 Expert Advisor code from trading strategies
-    
-    Supports:
-    - All 6 timeframes (M5, M15, M30, H1, H2, H4)
-    - Multiple indicator strategies
-    - Risk management integration
-    - Multi-timeframe confluence
+    Generate MQL5 Expert Advisor code from trading strategies.
+    Supports ML-enhanced EA generation with regime detection.
     """
-    
-    # Timeframe mapping
+
     TIMEFRAMES = {
-        'M5': 'PERIOD_M5',
-        'M15': 'PERIOD_M15',
-        'M30': 'PERIOD_M30',
-        'H1': 'PERIOD_H1',
-        'H2': 'PERIOD_H2',
-        'H4': 'PERIOD_H4',
+        "M5": "PERIOD_M5",
+        "M15": "PERIOD_M15",
+        "M30": "PERIOD_M30",
+        "H1": "PERIOD_H1",
+        "H2": "PERIOD_H2",
+        "H4": "PERIOD_H4",
     }
-    
+
     def generate_ea(
         self,
         name: str,
@@ -37,54 +28,62 @@ class MQL5CodeGenerator:
         use_stop_loss: bool = True,
         use_take_profit: bool = True,
         use_trailing_stop: bool = False,
-        trailing_stop_pips: int = 0
+        trailing_stop_pips: int = 0,
+        use_ml: bool = True,
+        use_regime_detection: bool = True,
     ) -> str:
-        """
-        Generate MQL5 Expert Advisor code
-        
-        Args:
-            name: EA name
-            symbol: Trading symbol
-            timeframe: Timeframe code (M5, M15, etc.)
-            strategy_type: Strategy type (scalping, momentum, etc.)
-            parameters: Strategy parameters
-            risk_per_trade: Risk percentage per trade
-            use_stop_loss: Whether to use stop loss
-            use_take_profit: Whether to use take profit
-            use_trailing_stop: Whether to use trailing stop
-            trailing_stop_pips: Trailing stop distance in pips
-            
-        Returns:
-            MQL5 code as string
-        """
-        mt5_timeframe = self.TIMEFRAMES.get(timeframe, 'PERIOD_H1')
-        
-        # Generate header
-        header = self._generate_header(name, symbol, timeframe, strategy_type)
-        
-        # Generate inputs
-        inputs = self._generate_inputs(
+        mt5_timeframe = self.TIMEFRAMES.get(timeframe, "PERIOD_H1")
+
+        if use_ml or use_regime_detection:
+            return self._generate_ml_ea(
+                name, symbol, timeframe, mt5_timeframe, strategy_type,
+                parameters, risk_per_trade, use_stop_loss, use_take_profit,
+                use_trailing_stop, trailing_stop_pips, use_ml, use_regime_detection,
+            )
+
+        return self._generate_basic_ea(
+            name, symbol, timeframe, mt5_timeframe, strategy_type,
             parameters, risk_per_trade, use_stop_loss, use_take_profit,
-            use_trailing_stop, trailing_stop_pips
+            use_trailing_stop, trailing_stop_pips,
         )
-        
-        # Generate indicator buffers
+
+    def _generate_ml_ea(
+        self, name, symbol, timeframe, mt5_timeframe, strategy_type,
+        parameters, risk_per_trade, use_sl, use_tp, use_trail, trail_pips,
+        use_ml, use_regime,
+    ) -> str:
+        import os
+        template_path = os.path.join(
+            os.path.dirname(__file__), "templates", "ml_ea_template.mq5"
+        )
+        try:
+            with open(template_path, "r") as f:
+                code = f.read()
+            code = code.replace("DutchkemTradingAI_ML", name)
+            code = code.replace("#property version   \"2.00\"", f"#property version   \"1.00\"")
+            return code
+        except FileNotFoundError:
+            return self._generate_basic_ea(
+                name, symbol, timeframe, mt5_timeframe, strategy_type,
+                parameters, risk_per_trade, use_sl, use_tp, use_trail, trail_pips,
+            )
+
+    def _generate_basic_ea(
+        self, name, symbol, timeframe, mt5_timeframe, strategy_type,
+        parameters, risk_per_trade, use_sl, use_tp, use_trail, trail_pips,
+    ) -> str:
+        header = self._generate_header(name, symbol, timeframe, strategy_type)
+        inputs = self._generate_inputs(
+            parameters, risk_per_trade, use_sl, use_tp, use_trail, trail_pips,
+        )
         indicators = self._generate_indicators(strategy_type, parameters)
-        
-        # GenerateOnInit
         on_init = self._generate_on_init(strategy_type)
-        
-        # Generate OnTick
         on_tick = self._generate_on_tick(
-            symbol, mt5_timeframe, strategy_type, parameters,
-            use_stop_loss, use_take_profit, use_trailing_stop
+            symbol, mt5_timeframe, strategy_type, parameters, use_sl, use_tp, use_trail,
         )
-        
-        # Generate helper functions
         helpers = self._generate_helpers()
-        
-        # Combine all parts
-        code = f"""{header}
+
+        return f"""{header}
 
 {inputs}
 
@@ -118,13 +117,11 @@ void OnTick()
 
 {helpers}
 """
-        return code
-    
-    def _generate_header(self, name: str, symbol: str, timeframe: str, strategy_type: str) -> str:
-        """Generate EA header"""
+
+    def _generate_header(self, name, symbol, timeframe, strategy_type):
         return f"""//+------------------------------------------------------------------+
 //| {name}.mq5
-//| Generated by Dutchkem Trading AI - @minimax
+//| Generated by Dutchkem Trading AI
 //| Strategy: {strategy_type.title()} on {timeframe}
 //| Symbol: {symbol}
 //| Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
@@ -133,79 +130,52 @@ void OnTick()
 #property link      "https://dutchkem.com"
 #property version   "1.00"
 #property strict"""
-    
-    def _generate_inputs(
-        self,
-        parameters: Dict[str, Any],
-        risk_per_trade: float,
-        use_stop_loss: bool,
-        use_take_profit: bool,
-        use_trailing_stop: bool,
-        trailing_stop_pips: int
-    ) -> str:
-        """Generate input parameters"""
+
+    def _generate_inputs(self, parameters, risk_per_trade, use_sl, use_tp, use_trail, trail_pips):
         inputs = f"""
 //+------------------------------------------------------------------+
 //| Input Parameters                                                  |
 //+------------------------------------------------------------------+
-input double RiskPercent = {risk_per_trade};           // Risk per trade (%)
-input bool   UseStopLoss = {use_stop_loss};            // Use Stop Loss
-input bool   UseTakeProfit = {use_take_profit};        // Use Take Profit
-input bool   UseTrailingStop = {use_trailing_stop};    // Use Trailing Stop
-input int    TrailingStopPips = {trailing_stop_pips};  // Trailing Stop (pips)
-input int    MagicNumber = 123456;                     // Magic Number
-input int    Slippage = 3;                             // Slippage (points)"""
-        
-        # Add strategy-specific inputs
+input double RiskPercent = {risk_per_trade};
+input bool   UseStopLoss = {use_sl};
+input bool   UseTakeProfit = {use_tp};
+input bool   UseTrailingStop = {use_trail};
+input int    TrailingStopPips = {trail_pips};
+input int    MagicNumber = 123456;
+input int    Slippage = 3;"""
+
         for key, value in parameters.items():
             if isinstance(value, (int, float)):
-                inputs += f"\ninput double {key.title()} = {value};  // {key.title()}"
-        
+                inputs += f"\ninput double {key.title()} = {value};"
+
         return inputs
-    
-    def _generate_indicators(self, strategy_type: str, parameters: Dict[str, Any]) -> str:
-        """Generate indicator declarations based on strategy"""
-        indicators = "int handle_rsi, handle_macd, handle_bb, handle_ema_fast, handle_ema_slow;\n"
-        indicators += "double buffer_rsi[], buffer_macd[], buffer_signal[], buffer_bb_upper[], buffer_bb_middle[], buffer_bb_lower[];\n"
-        indicators += "double buffer_ema_fast[], buffer_ema_slow[];"
-        
-        return indicators
-    
-    def _generate_on_init(self, strategy_type: str) -> str:
-        """Generate OnInit function body"""
-        return f"""   // Initialize indicators
-   handle_rsi = iRSI(_Symbol, PERIOD_CURRENT, 14, PRICE_CLOSE);
+
+    def _generate_indicators(self, strategy_type, parameters):
+        return """int handle_rsi, handle_macd, handle_bb, handle_ema_fast, handle_ema_slow;
+double buffer_rsi[], buffer_macd[], buffer_signal[], buffer_bb_upper[], buffer_bb_middle[], buffer_bb_lower[];
+double buffer_ema_fast[], buffer_ema_slow[];"""
+
+    def _generate_on_init(self, strategy_type):
+        return f"""   handle_rsi = iRSI(_Symbol, PERIOD_CURRENT, 14, PRICE_CLOSE);
    handle_macd = iMACD(_Symbol, PERIOD_CURRENT, 12, 26, 9, PRICE_CLOSE);
    handle_bb = iBands(_Symbol, PERIOD_CURRENT, 20, 0, 2.0, PRICE_CLOSE);
    handle_ema_fast = iMA(_Symbol, PERIOD_CURRENT, 5, 0, MODE_EMA, PRICE_CLOSE);
    handle_ema_slow = iMA(_Symbol, PERIOD_CURRENT, 10, 0, MODE_EMA, PRICE_CLOSE);
-   
+
    if(handle_rsi == INVALID_HANDLE || handle_macd == INVALID_HANDLE)
    {{
       Print("Failed to initialize indicators!");
       return(INIT_FAILED);
    }}
-   
+
    Print("{strategy_type.title()} EA initialized successfully");"""
-    
-    def _generate_on_tick(
-        self,
-        symbol: str,
-        timeframe: str,
-        strategy_type: str,
-        parameters: Dict[str, Any],
-        use_stop_loss: bool,
-        use_take_profit: bool,
-        use_trailing_stop: bool
-    ) -> str:
-        """Generate OnTick function body"""
-        return f"""   // Check for new bar
-   static datetime lastBarTime = 0;
+
+    def _generate_on_tick(self, symbol, timeframe, strategy_type, parameters, use_sl, use_tp, use_trail):
+        return f"""   static datetime lastBarTime = 0;
    datetime currentBarTime = iTime(_Symbol, {timeframe}, 0);
    if(lastBarTime == currentBarTime) return;
    lastBarTime = currentBarTime;
-   
-   // Get indicator values
+
    double rsi = GetIndicatorValue(handle_rsi, 0);
    double macdMain = GetIndicatorValue(handle_macd, 0);
    double macdSignal = GetIndicatorValue(handle_macd, 1);
@@ -214,40 +184,26 @@ input int    Slippage = 3;                             // Slippage (points)"""
    double bbLower = GetIndicatorValue(handle_bb, 2);
    double emaFast = GetIndicatorValue(handle_ema_fast, 0);
    double emaSlow = GetIndicatorValue(handle_ema_slow, 0);
-   
-   // Check for existing position
+
    if(HasOpenPosition(_Symbol, MagicNumber)) {{
-      // Manage existing position
-      {"ManageTrailingStop();" if use_trailing_stop else ""}
+      {"ManageTrailingStop();" if use_trail else ""}
       return;
    }}
-   
-   // Generate signals based on strategy
-   int signal = 0; // 0 = no signal, 1 = buy, -1 = sell
-   
-   {"// Scalping Strategy (M5)" if strategy_type == 'scalping' else ""}
-   {"// Momentum Strategy (M15)" if strategy_type == 'momentum' else ""}
-   {"// Swing Strategy (M30)" if strategy_type == 'swing' else ""}
-   {"// Trend Strategy (H1)" if strategy_type == 'trend' else ""}
-   {"// Position Strategy (H2)" if strategy_type == 'position' else ""}
-   {"// Strategic Strategy (H4)" if strategy_type == 'strategic' else ""}
-   
-   // Buy signal
+
+   int signal = 0;
+
    if(rsi < 30 && macdMain > macdSignal && emaFast > emaSlow) {{
       signal = 1;
    }}
-   // Sell signal
    else if(rsi > 70 && macdMain < macdSignal && emaFast < emaSlow) {{
       signal = -1;
    }}
-   
-   // Execute trade
+
    if(signal != 0) {{
       ExecuteTrade(signal, RiskPercent);
    }}"""
-    
-    def _generate_helpers(self) -> str:
-        """Generate helper functions"""
+
+    def _generate_helpers(self):
         return """//+------------------------------------------------------------------+
 //| Get indicator value                                               |
 //+------------------------------------------------------------------+
@@ -285,43 +241,39 @@ void ExecuteTrade(int signal, double riskPercent)
 {
    double accountEquity = AccountInfoDouble(ACCOUNT_EQUITY);
    double riskAmount = accountEquity * riskPercent / 100.0;
-   
-   // Calculate position size
+
    double tickValue = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
    double tickSize = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
    double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
-   
-   double slDistance = 50 * point; // 50 pips SL
+
+   double slDistance = 50 * point;
    double positionSize = NormalizeDouble(riskAmount / (slDistance / tickSize * tickValue), 2);
-   
-   // Normalize lot size
+
    double minLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
    double maxLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
    double lotStep = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
-   
+
    positionSize = MathFloor(positionSize / lotStep) * lotStep;
    positionSize = MathMax(minLot, MathMin(maxLot, positionSize));
-   
-   // Calculate SL and TP
+
    double price = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    double sl = 0, tp = 0;
-   
-   if(signal == 1) // Buy
+
+   if(signal == 1)
    {
       price = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
       sl = price - slDistance;
-      tp = price + slDistance * 2; // 1:2 RR
+      tp = price + slDistance * 2;
    }
-   else // Sell
+   else
    {
       sl = price + slDistance;
-      tp = price - slDistance * 2; // 1:2 RR
+      tp = price - slDistance * 2;
    }
-   
-   // Send order
+
    MqlTradeRequest request = {};
    MqlTradeResult result = {};
-   
+
    request.action = TRADE_ACTION_DEAL;
    request.symbol = _Symbol;
    request.volume = positionSize;
@@ -332,7 +284,7 @@ void ExecuteTrade(int signal, double riskPercent)
    request.deviation = 3;
    request.magic = MagicNumber;
    request.comment = "Dutchkem AI";
-   
+
    if(!OrderSend(request, result))
       Print("OrderSend failed: ", GetLastError());
    else
@@ -346,7 +298,7 @@ void ManageTrailingStop()
 {
    double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
    double trailingStop = TrailingStopPips * point;
-   
+
    for(int i = PositionsTotal() - 1; i >= 0; i--)
    {
       ulong ticket = PositionGetTicket(i);
@@ -354,12 +306,12 @@ void ManageTrailingStop()
       {
          if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
          if(PositionGetString(POSITION_SYMBOL) != _Symbol) continue;
-         
+
          double openPrice = PositionGetDouble(POSITION_PRICE_OPEN);
          double currentSL = PositionGetDouble(POSITION_SL);
          double currentTP = PositionGetDouble(POSITION_TP);
          long posType = PositionGetInteger(POSITION_TYPE);
-         
+
          if(posType == POSITION_TYPE_BUY)
          {
             double newSL = SymbolInfoDouble(_Symbol, SYMBOL_BID) - trailingStop;
@@ -395,5 +347,4 @@ void ManageTrailingStop()
 }"""
 
 
-# Singleton instance
 mql5_generator = MQL5CodeGenerator()

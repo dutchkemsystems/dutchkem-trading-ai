@@ -9,6 +9,7 @@ urlpatterns = [
     path("trades/<uuid:pk>/", views.TradeDetailView.as_view(), name="trade_detail"),
     path("trades/create/", views.TradeCreateView.as_view(), name="trade_create"),
     path("trades/<uuid:trade_id>/close/", views.TradeCloseView.as_view(), name="trade_close"),
+    path("trades/<uuid:trade_id>/modify/", views.TradeModifyView.as_view(), name="trade_modify"),
     path("orders/", views.OrderListView.as_view(), name="order_list"),
     path("orders/create/", views.OrderCreateView.as_view(), name="order_create"),
     path("orders/<uuid:order_id>/cancel/", views.OrderCancelView.as_view(), name="order_cancel"),

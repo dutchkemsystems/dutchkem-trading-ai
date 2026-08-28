@@ -10,7 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-change-this-in-production")
 
-DEBUG = int(os.getenv("DEBUG", 1))
+DEBUG = os.getenv("DEBUG", "1").lower() in ("true", "1", "yes")
 
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
@@ -207,10 +207,17 @@ INFLUXDB_URL = os.getenv("INFLUXDB_URL", "http://localhost:8086")
 INFLUXDB_TOKEN = os.getenv("INFLUXDB_TOKEN", "")
 INFLUXDB_ORG = os.getenv("INFLUXDB_ORG", "dutchkem")
 INFLUXDB_BUCKET = os.getenv("INFLUXDB_BUCKET", "trading_data")
+INFLUXDB_USER = os.getenv("INFLUXDB_USER", "admin")
+INFLUXDB_PASSWORD = os.getenv("INFLUXDB_PASSWORD", "")
+INFLUXDB_TIMEOUT = int(os.getenv("INFLUXDB_TIMEOUT", 30))
 
-# MetaTrader 5
+# MetaTrader 5 (SYNX-MT5-MCP)
 MT5_HOST = os.getenv("MT5_HOST", "localhost")
 MT5_PORT = int(os.getenv("MT5_PORT", 3000))
+MT5_WS_PORT = int(os.getenv("MT5_WS_PORT", 3001))
+MT5_TIMEOUT = int(os.getenv("MT5_TIMEOUT", 10))
+MT5_MAX_RETRIES = int(os.getenv("MT5_MAX_RETRIES", 5))
+MT5_RETRY_DELAY = float(os.getenv("MT5_RETRY_DELAY", 2.0))
 
 # Trading Configuration
 TRADING_CONFIG = {

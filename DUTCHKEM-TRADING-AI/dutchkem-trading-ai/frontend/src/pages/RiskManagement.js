@@ -1,34 +1,39 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import {
   Box, Grid, Paper, Typography, Card, CardContent, LinearProgress,
   Alert, Table, TableBody, TableCell, TableContainer, TableHead,
-  TableRow, Chip
+  TableRow, Chip, CircularProgress
 } from '@mui/material';
 import { Warning, TrendingDown, TrendingUp, Speed } from '@mui/icons-material';
+import { fetchRiskDashboard, fetchRiskAlerts } from '../features/risk/riskSlice';
 
 function RiskManagement() {
-  const riskStatus = {
-    equity: 10450.25,
-    peakEquity: 10500.00,
-    drawdown: 0.47,
-    dailyPnl: 320.50,
-    dailyPnlPercent: 0.31,
-    dailyTrades: 3,
-    isCircuitBreakerTriggered: false,
-  };
+  const dispatch = useDispatch();
+  const { dashboard, alerts, loading, error } = useSelector((state) => state.risk);
+
+  useEffect(() => {
+    dispatch(fetchRiskDashboard());
+    dispatch(fetchRiskAlerts());
+  }, [dispatch]);
+
+  if (loading && !dashboard) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  const riskParams = dashboard?.risk_parameters || {};
+  const currentStatus = dashboard?.current_status || {};
+  const circuitBreakers = dashboard?.circuit_breakers || {};
 
   const riskLimits = [
-    { name: 'Max Daily Loss', current: 0.5, limit: 2, unit: '%', status: 'ok' },
-    { name: 'Max Drawdown', current: 0.47, limit: 15, unit: '%', status: 'ok' },
-    { name: 'Daily Target', current: 0.31, limit: 0.4, unit: '%', status: 'warning' },
-    { name: 'Daily Trades', current: 3, limit: 10, unit: '', status: 'ok' },
-    { name: 'Position Size', current: 1, limit: 1, unit: '%', status: 'ok' },
-  ];
-
-  const recentAlerts = [
-    { type: 'INFO', message: 'Daily target reached 77.5%', time: '10 min ago', severity: 'info' },
-    { type: 'WARNING', message: 'Position size at 80% of limit', time: '1 hour ago', severity: 'warning' },
-    { type: 'SUCCESS', message: 'Trade closed with +$45 profit', time: '2 hours ago', severity: 'success' },
+    { name: 'Max Daily Loss', current: Math.abs(currentStatus.daily_pnl_percent || 0), limit: riskParams.max_daily_loss || 2, unit: '%', status: Math.abs(currentStatus.daily_pnl_percent || 0) >= (riskParams.max_daily_loss || 2) ? 'danger' : Math.abs(currentStatus.daily_pnl_percent || 0) >= (riskParams.max_daily_loss || 2) * 0.5 ? 'warning' : 'ok' },
+    { name: 'Max Drawdown', current: currentStatus.drawdown_percent || 0, limit: riskParams.max_drawdown || 15, unit: '%', status: (currentStatus.drawdown_percent || 0) >= (riskParams.max_drawdown || 15) ? 'danger' : (currentStatus.drawdown_percent || 0) >= (riskParams.max_drawdown || 15) * 0.5 ? 'warning' : 'ok' },
+    { name: 'Daily Target', current: currentStatus.daily_pnl_percent || 0, limit: riskParams.daily_growth_target || 0.14, unit: '%', status: (currentStatus.daily_pnl_percent || 0) >= (riskParams.daily_growth_target || 0.14) ? 'ok' : 'warning' },
+    { name: 'Daily Trades', current: currentStatus.daily_trades_count || 0, limit: riskParams.max_daily_trades || 10, unit: '', status: (currentStatus.daily_trades_count || 0) >= (riskParams.max_daily_trades || 10) ? 'danger' : 'ok' },
   ];
 
   const getStatusColor = (status) => {
@@ -47,32 +52,22 @@ function RiskManagement() {
         Risk Management
       </Typography>
 
-      {/* Circuit Breaker Status */}
-      {!riskStatus.isCircuitBreakerTriggered ? (
-        <Alert severity="success" sx={{ mb: 3 }}>
-          All systems normal. Trading is allowed.
-        </Alert>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+      {!circuitBreakers.daily_loss_active && !circuitBreakers.max_drawdown_active ? (
+        <Alert severity="success" sx={{ mb: 3 }}>All systems normal. Trading is allowed.</Alert>
       ) : (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          Circuit breaker triggered! Trading has been stopped.
-        </Alert>
+        <Alert severity="error" sx={{ mb: 3 }}>Circuit breaker triggered! Trading has been stopped.</Alert>
       )}
 
-      {/* Risk Status Cards */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
-              <Typography color="textSecondary">Current Equity</Typography>
-              <Typography variant="h5">${riskStatus.equity.toLocaleString()}</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary">Peak Equity</Typography>
-              <Typography variant="h5">${riskStatus.peakEquity.toLocaleString()}</Typography>
+              <Typography color="textSecondary">Daily P&L</Typography>
+              <Typography variant="h5" color={(currentStatus.daily_pnl_percent || 0) >= 0 ? 'success.main' : 'error.main'}>
+                {Number(currentStatus.daily_pnl_percent || 0).toFixed(2)}%
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -80,31 +75,36 @@ function RiskManagement() {
           <Card>
             <CardContent>
               <Typography color="textSecondary">Drawdown</Typography>
-              <Typography variant="h5" color={riskStatus.drawdown > 10 ? 'error.main' : 'inherit'}>
-                {riskStatus.drawdown}%
+              <Typography variant="h5" color={(currentStatus.drawdown_percent || 0) > 10 ? 'error.main' : 'inherit'}>
+                {Number(currentStatus.drawdown_percent || 0).toFixed(2)}%
               </Typography>
-              <LinearProgress
-                variant="determinate"
-                value={(riskStatus.drawdown / 15) * 100}
-                color={riskStatus.drawdown > 10 ? 'error' : 'primary'}
-                sx={{ mt: 1 }}
-              />
+              <LinearProgress variant="determinate"
+                value={Math.min((currentStatus.drawdown_percent || 0) / (riskParams.max_drawdown || 15) * 100, 100)}
+                color={(currentStatus.drawdown_percent || 0) > 10 ? 'error' : 'primary'}
+                sx={{ mt: 1 }} />
             </CardContent>
           </Card>
         </Grid>
         <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
-              <Typography color="textSecondary">Daily P&L</Typography>
-              <Typography variant="h5" color={riskStatus.dailyPnl >= 0 ? 'success.main' : 'error.main'}>
-                ${riskStatus.dailyPnl} ({riskStatus.dailyPnlPercent}%)
+              <Typography color="textSecondary">Daily Loss Remaining</Typography>
+              <Typography variant="h5" color={(currentStatus.daily_loss_remaining || 2) < 0.5 ? 'error.main' : 'success.main'}>
+                {Number(currentStatus.daily_loss_remaining || 2).toFixed(2)}%
               </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={3}>
+          <Card>
+            <CardContent>
+              <Typography color="textSecondary">Daily Trades</Typography>
+              <Typography variant="h5">{currentStatus.daily_trades_count || 0} / {riskParams.max_daily_trades || 10}</Typography>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
 
-      {/* Risk Limits */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} md={8}>
           <Paper sx={{ p: 2 }}>
@@ -124,22 +124,16 @@ function RiskManagement() {
                   {riskLimits.map((limit) => (
                     <TableRow key={limit.name}>
                       <TableCell>{limit.name}</TableCell>
-                      <TableCell>{limit.current}{limit.unit}</TableCell>
+                      <TableCell>{limit.current.toFixed(2)}{limit.unit}</TableCell>
                       <TableCell>{limit.limit}{limit.unit}</TableCell>
                       <TableCell>
-                        <LinearProgress
-                          variant="determinate"
-                          value={(limit.current / limit.limit) * 100}
+                        <LinearProgress variant="determinate"
+                          value={Math.min((limit.current / limit.limit) * 100, 100)}
                           color={getStatusColor(limit.status)}
-                          sx={{ width: 150 }}
-                        />
+                          sx={{ width: 150 }} />
                       </TableCell>
                       <TableCell>
-                        <Chip
-                          label={limit.status.toUpperCase()}
-                          color={getStatusColor(limit.status)}
-                          size="small"
-                        />
+                        <Chip label={limit.status.toUpperCase()} color={getStatusColor(limit.status)} size="small" />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -151,48 +145,28 @@ function RiskManagement() {
         <Grid item xs={12} md={4}>
           <Paper sx={{ p: 2 }}>
             <Typography variant="h6" gutterBottom>Recent Alerts</Typography>
-            {recentAlerts.map((alert, index) => (
-              <Alert key={index} severity={alert.severity} sx={{ mb: 1 }}>
+            {(alerts || []).slice(0, 5).map((alert, index) => (
+              <Alert key={alert.id || index} severity={alert.severity?.toLowerCase() || 'info'} sx={{ mb: 1 }}>
                 <Typography variant="body2">{alert.message}</Typography>
-                <Typography variant="caption" color="textSecondary">{alert.time}</Typography>
+                <Typography variant="caption" color="textSecondary">
+                  {alert.created_at ? new Date(alert.created_at).toLocaleString() : ''}
+                </Typography>
               </Alert>
             ))}
+            {(!alerts || alerts.length === 0) && (
+              <Typography color="textSecondary" align="center">No recent alerts</Typography>
+            )}
           </Paper>
         </Grid>
       </Grid>
 
-      {/* Daily Performance */}
       <Paper sx={{ p: 2 }}>
-        <Typography variant="h6" gutterBottom>Daily Performance</Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent>
-                <Typography color="textSecondary">Win Rate</Typography>
-                <Typography variant="h4" color="success.main">62%</Typography>
-                <Typography variant="body2" color="textSecondary">5 wins / 3 losses</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent>
-                <Typography color="textSecondary">Risk-Reward Ratio</Typography>
-                <Typography variant="h4">1:2.3</Typography>
-                <Typography variant="body2" color="textSecondary">Avg Win: $45 / Avg Loss: $20</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent>
-                <Typography color="textSecondary">Profit Factor</Typography>
-                <Typography variant="h4" color="success.main">2.8</Typography>
-                <Typography variant="body2" color="textSecondary">Total Win / Total Loss</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
+        <Typography variant="h6" gutterBottom>Circuit Breakers</Typography>
+        <Box display="flex" gap={2}>
+          <Chip label="Daily Loss Limit" color={circuitBreakers.daily_loss_active ? 'error' : 'success'} variant="outlined" />
+          <Chip label="Max Drawdown" color={circuitBreakers.max_drawdown_active ? 'error' : 'success'} variant="outlined" />
+          <Chip label="Daily Trade Limit" color={circuitBreakers.daily_trades_active ? 'error' : 'success'} variant="outlined" />
+        </Box>
       </Paper>
     </Box>
   );

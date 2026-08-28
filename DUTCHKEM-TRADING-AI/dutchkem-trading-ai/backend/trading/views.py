@@ -15,6 +15,7 @@ from .serializers import (
     TradeCreateSerializer,
     TradeSerializer,
 )
+from .services import OrderExecutionError, RiskCheckError, order_service
 
 
 class SymbolListView(generics.ListAPIView):
@@ -57,22 +58,41 @@ class TradeCreateView(APIView):
         serializer = TradeCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        # Here we would integrate with MT5 via SYNX-MT5-MCP
-        # For now, create the trade record
-        symbol = Symbol.objects.get(id=serializer.validated_data["symbol"])
+        try:
+            symbol = Symbol.objects.get(id=serializer.validated_data["symbol"])
+        except Symbol.DoesNotExist:
+            return Response(
+                {"error": "Symbol not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
-        trade = Trade.objects.create(
-            user=request.user,
-            symbol=symbol,
-            position_type=serializer.validated_data["position_type"],
-            volume=serializer.validated_data["volume"],
-            open_price=0,  # Would be filled from MT5
-            stop_loss=serializer.validated_data.get("stop_loss"),
-            take_profit=serializer.validated_data.get("take_profit"),
-            status="PENDING",
-        )
+        try:
+            result = order_service.execute_market_order(
+                user=request.user,
+                symbol=symbol,
+                position_type=serializer.validated_data["position_type"],
+                volume=serializer.validated_data["volume"],
+                stop_loss=serializer.validated_data.get("stop_loss"),
+                take_profit=serializer.validated_data.get("take_profit"),
+                signal_id=serializer.validated_data.get("signal_id"),
+            )
+            return Response(result, status=status.HTTP_201_CREATED)
 
-        return Response(TradeSerializer(trade).data, status=status.HTTP_201_CREATED)
+        except RiskCheckError as e:
+            return Response(
+                {"error": str(e), "type": "risk_check"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        except OrderExecutionError as e:
+            return Response(
+                {"error": str(e), "type": "execution_error"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Unexpected error: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class TradeCloseView(APIView):
@@ -80,16 +100,37 @@ class TradeCloseView(APIView):
 
     def post(self, request, trade_id):
         try:
-            trade = Trade.objects.get(id=trade_id, user=request.user, status="OPEN")
-        except Trade.DoesNotExist:
-            return Response({"error": "Trade not found"}, status=status.HTTP_404_NOT_FOUND)
+            result = order_service.close_trade(
+                trade_id=str(trade_id),
+                user=request.user,
+            )
+            return Response(result)
 
-        # Close trade via MT5
-        trade.status = "CLOSED"
-        trade.closed_at = timezone.now()
-        trade.save()
+        except OrderExecutionError as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        return Response(TradeSerializer(trade).data)
+
+class TradeModifyView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, trade_id):
+        try:
+            result = order_service.modify_trade(
+                trade_id=str(trade_id),
+                user=request.user,
+                stop_loss=request.data.get("stop_loss"),
+                take_profit=request.data.get("take_profit"),
+            )
+            return Response(result)
+
+        except OrderExecutionError as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class OrderListView(generics.ListAPIView):
@@ -106,7 +147,31 @@ class OrderCreateView(APIView):
         serializer = OrderCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        symbol = Symbol.objects.get(id=serializer.validated_data["symbol"])
+        try:
+            symbol = Symbol.objects.get(id=serializer.validated_data["symbol"])
+        except Symbol.DoesNotExist:
+            return Response(
+                {"error": "Symbol not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        valid, message, checks = order_service.validate_order(
+            user=request.user,
+            symbol=symbol,
+            position_type=serializer.validated_data["position_type"],
+            volume=serializer.validated_data["volume"],
+            stop_loss=serializer.validated_data.get("stop_loss"),
+            take_profit=serializer.validated_data.get("take_profit"),
+            order_type=serializer.validated_data["order_type"],
+        )
+
+        if not valid:
+            return Response(
+                {"error": message, "checks": checks},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        from decimal import Decimal
 
         order = Order.objects.create(
             user=request.user,
@@ -121,6 +186,31 @@ class OrderCreateView(APIView):
             status="PENDING",
         )
 
+        if serializer.validated_data["order_type"] == "MARKET":
+            try:
+                result = order_service.execute_market_order(
+                    user=request.user,
+                    symbol=symbol,
+                    position_type=serializer.validated_data["position_type"],
+                    volume=serializer.validated_data["volume"],
+                    stop_loss=serializer.validated_data.get("stop_loss"),
+                    take_profit=serializer.validated_data.get("take_profit"),
+                )
+                order.status = "FILLED"
+                order.mt5_ticket = result.get("mt5_ticket")
+                order.save()
+                return Response(
+                    {**OrderSerializer(order).data, "execution": result},
+                    status=status.HTTP_201_CREATED,
+                )
+            except (RiskCheckError, OrderExecutionError) as e:
+                order.status = "REJECTED"
+                order.save()
+                return Response(
+                    {"error": str(e), "order": OrderSerializer(order).data},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
 
@@ -132,6 +222,16 @@ class OrderCancelView(APIView):
             order = Order.objects.get(id=order_id, user=request.user, status="PENDING")
         except Order.DoesNotExist:
             return Response({"error": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if order.mt5_ticket:
+            import asyncio
+            from mcp_integration.services import mt5_service
+
+            loop = asyncio.new_event_loop()
+            try:
+                loop.run_until_complete(mt5_service.cancel_order(int(order.mt5_ticket)))
+            finally:
+                loop.close()
 
         order.status = "CANCELLED"
         order.save()
@@ -153,10 +253,8 @@ class PortfolioSummaryView(APIView):
         positions = Position.objects.filter(user=request.user)
 
         total_unrealized_pnl = positions.aggregate(total=Sum("unrealized_pnl"))["total"] or 0
-
         total_margin_used = positions.aggregate(total=Sum("margin_used"))["total"] or 0
 
-        # Get user's account info
         user = request.user
 
         return Response(

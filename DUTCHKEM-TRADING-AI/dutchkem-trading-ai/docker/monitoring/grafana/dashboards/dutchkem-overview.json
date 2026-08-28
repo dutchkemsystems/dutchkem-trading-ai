@@ -1,94 +1,82 @@
-# Grafana Dashboard — Dutchkem Trading Overview
-
 {
-  "dashboard": {
-    "id": null,
-    "title": "Dutchkem Trading AI Overview",
-    "tags": ["dutchkem", "trading"],
-    "timezone": "browser",
-    "panels": [
-      {
-        "title": "Request Rate",
-        "type": "graph",
-        "targets": [
-          {
-            "expr": "rate(http_requests_total[5m])",
-            "legendFormat": "{{method}} {{path}}",
-            "refId": "A"
-          }
-        ],
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
-      },
-      {
-        "title": "Response Time",
-        "type": "graph",
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
-            "legendFormat": "95th percentile",
-            "refId": "A"
-          },
-          {
-            "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket[5m]))",
-            "legendFormat": "50th percentile",
-            "refId": "B"
-          }
-        ],
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
-      },
-      {
-        "title": "Error Rate",
-        "type": "stat",
-        "targets": [
-          {
-            "expr": "rate(http_requests_total{status=~'5..'}[5m])",
-            "legendFormat": "Errors/s",
-            "refId": "A"
-          }
-        ],
-        "gridPos": { "h": 4, "w": 6, "x": 0, "y": 8 }
-      },
-      {
-        "title": "Active Connections",
-        "type": "stat",
-        "targets": [
-          {
-            "expr": "django_http_connections_current",
-            "legendFormat": "Connections",
-            "refId": "A"
-          }
-        ],
-        "gridPos": { "h": 4, "w": 6, "x": 6, "y": 8 }
-      },
-      {
-        "title": "Cache Hit Rate",
-        "type": "stat",
-        "targets": [
-          {
-            "expr": "rate(redis_commands_total{cmd='get'}[5m]) / rate(redis_commands_total[5m])",
-            "legendFormat": "Hit Rate",
-            "refId": "A"
-          }
-        ],
-        "gridPos": { "h": 4, "w": 6, "x": 12, "y": 8 }
-      },
-      {
-        "title": "Trading Signals Generated",
-        "type": "stat",
-        "targets": [
-          {
-            "expr": "rate(signals_generated_total[5m])",
-            "legendFormat": "Signals/s",
-            "refId": "A"
-          }
-        ],
-        "gridPos": { "h": 4, "w": 6, "x": 18, "y": 8 }
+  "annotations": { "list": [] },
+  "editable": true,
+  "panels": [
+    {
+      "title": "System Uptime",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "up",
+          "legendFormat": "{{job}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } }, "type": "value" }
+          ]
+        }
       }
-    ],
-    "time": {
-      "from": "now-1h",
-      "to": "now"
     },
-    "refresh": "10s"
-  }
+    {
+      "title": "HTTP Request Latency (p95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 6, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "p95 latency",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Error Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "rate(http_requests_total{status=~'5..'}[5m])",
+          "legendFormat": "5xx errors",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "MT5 Connection Status",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "trading_mt5_connected",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Circuit Breaker",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 8 },
+      "targets": [
+        {
+          "expr": "trading_circuit_breaker_active",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "text": "NORMAL", "color": "green" }, "1": { "text": "TRIGGERED", "color": "red" } }, "type": "value" }
+          ]
+        }
+      }
+    }
+  ],
+  "schemaVersion": 38,
+  "tags": ["system", "dutchkem"],
+  "title": "Dutchkem Overview",
+  "uid": "dutchkem-overview"
 }

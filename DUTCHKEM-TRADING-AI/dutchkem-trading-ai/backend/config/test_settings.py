@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     "mcp_integration",
     "market_data",
     "notifications",
+    "analytics",
 ]
 
 # Use SQLite for testing
@@ -69,6 +70,8 @@ CACHES = {
 }
 
 # Celery: run tasks synchronously for testing
+CELERY_BROKER_URL = "memory://"
+CELERY_RESULT_BACKEND = "cache+memory://"
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
 

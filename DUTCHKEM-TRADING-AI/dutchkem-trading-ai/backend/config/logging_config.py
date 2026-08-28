@@ -1,40 +1,20 @@
-# Dutchkem Trading AI — Structured Logging Configuration
-
-import logging
-import logging.config
-import sys
-
-from pythonjsonlogger import jsonlogger
-
-# Logging configuration
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
         "json": {
             "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
-            "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
-            "rename_fields": {
-                "asctime": "timestamp",
-                "levelname": "level",
-                "name": "logger",
-            },
+            "format": "%(asctime)s %(levelname)s %(name)s %(module)s %(funcName)s %(lineno)d %(message)s",
+            "datefmt": "%Y-%m-%dT%H:%M:%S",
         },
         "verbose": {
             "format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}",
             "style": "{",
         },
-        "simple": {
-            "format": "{levelname} {message}",
-            "style": "{",
-        },
     },
     "filters": {
-        "request_context": {
-            "()": "logging_filters.RequestContextFilter",
-        },
-        "trading_context": {
-            "()": "logging_filters.TradingContextFilter",
+        "require_debug_true": {
+            "()": "django.utils.log.RequireDebugTrue",
         },
     },
     "handlers": {
@@ -42,45 +22,28 @@ LOGGING = {
             "level": "INFO",
             "class": "logging.StreamHandler",
             "formatter": "json",
-            "stream": sys.stdout,
         },
         "file": {
             "level": "INFO",
             "class": "logging.handlers.RotatingFileHandler",
-            "filename": "/app/logs/django.log",
-            "maxBytes": 1024 * 1024 * 10,  # 10MB
-            "backupCount": 5,
+            "filename": "logs/django.log",
+            "maxBytes": 10485760,
+            "backupCount": 10,
             "formatter": "json",
         },
         "trading_file": {
             "level": "INFO",
             "class": "logging.handlers.RotatingFileHandler",
-            "filename": "/app/logs/trading.log",
-            "maxBytes": 1024 * 1024 * 10,
-            "backupCount": 10,
-            "formatter": "json",
-        },
-        "risk_file": {
-            "level": "WARNING",
-            "class": "logging.handlers.RotatingFileHandler",
-            "filename": "/app/logs/risk.log",
-            "maxBytes": 1024 * 1024 * 10,
+            "filename": "logs/trading.log",
+            "maxBytes": 10485760,
             "backupCount": 10,
             "formatter": "json",
         },
         "error_file": {
             "level": "ERROR",
             "class": "logging.handlers.RotatingFileHandler",
-            "filename": "/app/logs/error.log",
-            "maxBytes": 1024 * 1024 * 10,
-            "backupCount": 10,
-            "formatter": "json",
-        },
-        "security_file": {
-            "level": "INFO",
-            "class": "logging.handlers.RotatingFileHandler",
-            "filename": "/app/logs/security.log",
-            "maxBytes": 1024 * 1024 * 10,
+            "filename": "logs/error.log",
+            "maxBytes": 10485760,
             "backupCount": 10,
             "formatter": "json",
         },
@@ -88,53 +51,48 @@ LOGGING = {
     "loggers": {
         "django": {
             "handlers": ["console", "file"],
-            "level": "INFO",
             "propagate": True,
+            "level": "WARNING",
         },
         "django.request": {
-            "handlers": ["console", "file"],
-            "level": "INFO",
+            "handlers": ["console", "error_file"],
             "propagate": False,
-        },
-        "django.security": {
-            "handlers": ["console", "security_file"],
             "level": "INFO",
-            "propagate": False,
         },
         "trading": {
             "handlers": ["console", "trading_file"],
+            "propagate": False,
             "level": "INFO",
-            "propagate": False,
-            "filters": ["trading_context"],
-        },
-        "risk_management": {
-            "handlers": ["console", "risk_file"],
-            "level": "WARNING",
-            "propagate": False,
-            "filters": ["trading_context"],
         },
         "signals": {
             "handlers": ["console", "trading_file"],
-            "level": "INFO",
             "propagate": False,
-            "filters": ["trading_context"],
+            "level": "INFO",
+        },
+        "risk_management": {
+            "handlers": ["console", "trading_file"],
+            "propagate": False,
+            "level": "INFO",
         },
         "payments": {
-            "handlers": ["console", "security_file"],
-            "level": "INFO",
+            "handlers": ["console", "file"],
             "propagate": False,
-            "filters": ["request_context"],
+            "level": "INFO",
         },
-        "accounts": {
-            "handlers": ["console", "security_file"],
-            "level": "INFO",
+        "market_data": {
+            "handlers": ["console", "file"],
             "propagate": False,
-            "filters": ["request_context"],
+            "level": "INFO",
         },
-        "mcp_integration": {
-            "handlers": ["console", "trading_file"],
-            "level": "INFO",
+        "notifications": {
+            "handlers": ["console", "file"],
             "propagate": False,
+            "level": "INFO",
+        },
+        "monitoring": {
+            "handlers": ["console"],
+            "propagate": False,
+            "level": "INFO",
         },
     },
     "root": {

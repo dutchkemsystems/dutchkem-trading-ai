@@ -1,76 +1,54 @@
-# Dutchkem Trading AI — Risk Management Tests
-
+import pytest
 from decimal import Decimal
 
-import pytest
-from rest_framework import status
-
 
 @pytest.mark.django_db
-class TestRiskParameterModel:
-    def test_create_risk_parameter(self):
-        from risk_management.models import RiskParameter
+class TestRiskAPI:
+    def test_get_risk_parameters(self, auth_client):
+        response = auth_client.get("/api/v1/risk/parameters/")
+        assert response.status_code == 200
 
-        params = RiskParameter.objects.create(
-            name="Default Risk Parameters",
-            max_daily_loss=Decimal("2.0"),
-            daily_growth_target=Decimal("0.14"),
-            daily_target_lock=Decimal("0.4"),
-            max_daily_trades=10,
-            max_position_size=Decimal("1.0"),
-            max_drawdown=Decimal("15.0"),
-            min_risk_reward_ratio=Decimal("2.0"),
-            target_annual_growth=Decimal("50.0"),
-        )
-        assert params.max_daily_loss == Decimal("2.0")
-        assert params.max_daily_trades == 10
+    def test_get_drawdown_status(self, auth_client):
+        response = auth_client.get("/api/v1/risk/drawdown/status/")
+        assert response.status_code == 200
 
+    def test_get_risk_dashboard(self, auth_client):
+        response = auth_client.get("/api/v1/risk/dashboard/")
+        assert response.status_code == 200
 
-@pytest.mark.django_db
-class TestDrawdownMonitor:
-    def test_create_drawdown_monitor(self, user):
-        from risk_management.models import DrawdownMonitor
+    def test_get_risk_alerts(self, auth_client):
+        response = auth_client.get("/api/v1/risk/alerts/")
+        assert response.status_code == 200
 
-        monitor = DrawdownMonitor.objects.create(
-            user=user,
-            peak_equity=Decimal("10000"),
-            current_equity=Decimal("9900"),
-            starting_equity_today=Decimal("10000"),
-            drawdown_percent=Decimal("1.0"),
-            daily_pnl=Decimal("-100"),
-            daily_pnl_percent=Decimal("-1.0"),
-            daily_trades_count=3,
-        )
-        assert monitor.drawdown_percent == Decimal("1.0")
-        assert monitor.daily_trades_count == 3
+    def test_position_sizing(self, auth_client):
+        response = auth_client.post("/api/v1/risk/position-sizing/", {
+            "symbol": "EURUSD",
+            "risk_amount": "100",
+            "stop_loss_pips": "50",
+        })
+        assert response.status_code in (200, 201, 400)
 
-    def test_reset_daily(self, user):
-        from risk_management.models import DrawdownMonitor
+    def test_unauthorized_risk(self, api_client):
+        response = api_client.get("/api/v1/risk/parameters/")
+        assert response.status_code == 401
 
-        monitor = DrawdownMonitor.objects.create(
-            user=user,
-            peak_equity=Decimal("10000"),
-            current_equity=Decimal("9900"),
-            starting_equity_today=Decimal("10000"),
-            drawdown_percent=Decimal("1.0"),
-            daily_pnl=Decimal("-100"),
-            daily_trades_count=5,
-        )
-        monitor.reset_daily()
-        assert monitor.daily_pnl == 0
-        assert monitor.daily_trades_count == 0
+    def test_get_daily_performance(self, auth_client):
+        response = auth_client.get("/api/v1/risk/daily-performance/")
+        assert response.status_code == 200
 
+    def test_risk_dashboard_structure(self, auth_client):
+        response = auth_client.get("/api/v1/risk/dashboard/")
+        if response.status_code == 200:
+            data = response.data
+            assert isinstance(data, dict)
 
-@pytest.mark.django_db
-class TestRiskEndpoints:
-    def test_get_risk_parameters(self, authenticated_client):
-        response = authenticated_client.get("/api/v1/risk/parameters/")
-        assert response.status_code == status.HTTP_200_OK
+    def test_position_sizing_invalid_data(self, auth_client):
+        response = auth_client.post("/api/v1/risk/position-sizing/", {
+            "symbol": "EURUSD",
+        })
+        assert response.status_code in (400, 404)
 
-    def test_get_drawdown_status(self, authenticated_client):
-        response = authenticated_client.get("/api/v1/risk/drawdown/status/")
-        assert response.status_code in (status.HTTP_200_OK, status.HTTP_404_NOT_FOUND)
-
-    def test_get_risk_dashboard(self, authenticated_client):
-        response = authenticated_client.get("/api/v1/risk/dashboard/")
-        assert response.status_code in (status.HTTP_200_OK, status.HTTP_404_NOT_FOUND)
+    def test_drawdown_status_structure(self, auth_client):
+        response = auth_client.get("/api/v1/risk/drawdown/status/")
+        if response.status_code == 200:
+            assert isinstance(response.data, dict)

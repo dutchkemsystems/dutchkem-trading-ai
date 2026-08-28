@@ -6,14 +6,9 @@ from django.db import models
 
 class PaymentGateway(models.Model):
     GATEWAY_TYPES = [
+        ("KORAPAY", "Korapay"),
         ("PAYSTACK", "Paystack"),
         ("FLUTTERWAVE", "Flutterwave"),
-        ("STRIPE", "Stripe"),
-        ("COINBASE", "Coinbase"),
-        ("PAYPAL", "PayPal"),
-        ("SKRILL", "Skrill"),
-        ("NETELLER", "Neteller"),
-        ("MPESA", "M-Pesa"),
         ("BANK_TRANSFER", "Bank Transfer"),
     ]
 
@@ -31,9 +26,8 @@ class PaymentGateway(models.Model):
     withdrawal_fee_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     deposit_processing_time = models.CharField(max_length=50, default="Instant")
     withdrawal_processing_time = models.CharField(max_length=50, default="1-3 Business Days")
-    api_key = models.CharField(max_length=255, blank=True)
-    api_secret = models.CharField(max_length=255, blank=True)
-    webhook_secret = models.CharField(max_length=255, blank=True)
+    supported_currencies = models.JSONField(default=list)
+    supported_channels = models.JSONField(default=list)
     config = models.JSONField(default=dict)
 
     class Meta:
@@ -68,10 +62,12 @@ class Transaction(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="transactions")
     transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
     amount = models.DecimalField(max_digits=20, decimal_places=2)
-    currency = models.CharField(max_length=3, default="USD")
+    currency = models.CharField(max_length=3, default="NGN")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="PENDING")
     gateway = models.ForeignKey(PaymentGateway, on_delete=models.SET_NULL, null=True, blank=True)
     gateway_reference = models.CharField(max_length=255, blank=True)
+    korapay_ref = models.CharField(max_length=255, blank=True, db_index=True)
+    channel = models.CharField(max_length=50, blank=True)
     gateway_response = models.JSONField(default=dict)
     fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     net_amount = models.DecimalField(max_digits=20, decimal_places=2)
@@ -86,6 +82,7 @@ class Transaction(models.Model):
         indexes = [
             models.Index(fields=["user", "transaction_type", "-created_at"]),
             models.Index(fields=["status"]),
+            models.Index(fields=["korapay_ref"]),
         ]
 
     def __str__(self):
@@ -130,17 +127,15 @@ class KYCVerification(models.Model):
 
 
 class UserPaymentMethod(models.Model):
-    """Saved payment methods for users"""
-
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="payment_methods")
     gateway = models.ForeignKey(PaymentGateway, on_delete=models.CASCADE)
-    method_type = models.CharField(max_length=50)  # card, bank_account, crypto_wallet, mobile_money
+    method_type = models.CharField(max_length=50)
     display_name = models.CharField(max_length=100)
     last_four = models.CharField(max_length=4, blank=True)
     is_default = models.BooleanField(default=False)
     is_verified = models.BooleanField(default=False)
-    details_encrypted = models.TextField()  # Encrypted payment details
+    details_encrypted = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

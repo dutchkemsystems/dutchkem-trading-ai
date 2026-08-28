@@ -1,21 +1,17 @@
-# Alert Rules for Dutchkem Trading AI
-
 groups:
-  - name: dutchkem_alerts
+  - name: dutchkem-alerts
     rules:
-      # High error rate
       - alert: HighErrorRate
-        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
         for: 5m
         labels:
           severity: critical
         annotations:
           summary: "High error rate detected"
-          description: "Error rate is {{ $value }} per second"
+          description: "Error rate is {{ $value }} requests/sec"
 
-      # High latency
       - alert: HighLatency
-        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
         for: 5m
         labels:
           severity: warning
@@ -23,42 +19,83 @@ groups:
           summary: "High latency detected"
           description: "95th percentile latency is {{ $value }}s"
 
-      # Redis down
+      - alert: DrawdownExceeded
+        expr: trading_drawdown_percent > 15
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Max drawdown exceeded"
+          description: "Drawdown is {{ $value }}% (limit: 15%)"
+
+      - alert: DailyLossLimit
+        expr: abs(trading_daily_pnl_percent) > 2
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Daily loss limit reached"
+          description: "Daily loss is {{ $value }}% (limit: 2%)"
+
+      - alert: MT5Disconnected
+        expr: trading_mt5_connected == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MT5 connection lost"
+          description: "MT5 is disconnected"
+
+      - alert: InfluxDBDown
+        expr: up{job="influxdb"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "InfluxDB is down"
+          description: "InfluxDB instance is unreachable"
+
       - alert: RedisDown
-        expr: redis_up == 0
+        expr: up{job="redis"} == 0
         for: 1m
         labels:
           severity: critical
         annotations:
           summary: "Redis is down"
-          description: "Redis instance is not responding"
+          description: "Redis instance is unreachable"
 
-      # PostgreSQL down
-      - alert: PostgreSQLDown
-        expr: pg_up == 0
-        for: 1m
+      - alert: CircuitBreakerTriggered
+        expr: trading_circuit_breaker_active == 1
+        for: 0m
         labels:
           severity: critical
         annotations:
-          summary: "PostgreSQL is down"
-          description: "PostgreSQL instance is not responding"
+          summary: "Circuit breaker triggered"
+          description: "Trading has been stopped due to risk limits"
 
-      # High memory usage
+      - alert: PaymentWebhookFailed
+        expr: rate(payment_webhook_errors_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Payment webhook failures"
+          description: "Payment webhook error rate is {{ $value }}/sec"
+
+      - alert: LowDiskSpace
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is below 10%"
+
       - alert: HighMemoryUsage
-        expr: (process_resident_memory_bytes / process_virtual_memory_max_bytes) > 0.8
+        expr: (process_resident_memory_bytes / process_virtual_memory_max_bytes) > 0.9
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "High memory usage"
-          description: "Memory usage is {{ $value | humanizePercentage }}"
-
-      # Trading signal latency
-      - alert: SignalGenerationSlow
-        expr: signal_generation_duration_seconds > 2
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Signal generation is slow"
-          description: "Signal generation took {{ $value }}s"
+          description: "Memory usage is above 90%"

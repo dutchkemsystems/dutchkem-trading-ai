@@ -1,63 +1,75 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
-  Box, Grid, Paper, Typography, Card, CardContent, CardHeader,
+  Box, Grid, Paper, Typography, Card, CardContent,
   LinearProgress, Chip, Alert, Table, TableBody, TableCell,
-  TableContainer, TableHead, TableRow
+  TableContainer, TableHead, TableRow, CircularProgress
 } from '@mui/material';
 import {
-  TrendingUp, TrendingDown, AccountBalance, Warning,
-  Speed, SmartToy, Payment
+  TrendingUp, TrendingDown, AccountBalance, Warning, Speed
 } from '@mui/icons-material';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, AreaChart, Area
 } from 'recharts';
-import { setDrawdownStatus, setDailyPerformance } from '../features/risk/riskSlice';
-import { setPortfolio } from '../features/trading/tradingSlice';
-
-// Mock data for charts
-const equityCurve = [
-  { time: '00:00', equity: 10000 },
-  { time: '04:00', equity: 10050 },
-  { time: '08:00', equity: 10120 },
-  { time: '12:00', equity: 10080 },
-  { time: '16:00', equity: 10180 },
-  { time: '20:00', equity: 10250 },
-  { time: '24:00', equity: 10320 },
-];
-
-const dailyPnL = [
-  { day: 'Mon', pnl: 0.12 },
-  { day: 'Tue', pnl: 0.18 },
-  { day: 'Wed', pnl: -0.05 },
-  { day: 'Thu', pnl: 0.15 },
-  { day: 'Fri', pnl: 0.22 },
-];
+import { fetchPortfolio, fetchPositions } from '../features/trading/tradingSlice';
+import { fetchActiveSignals } from '../features/signals/signalsSlice';
+import { fetchDrawdownStatus, fetchDailyPerformance } from '../features/risk/riskSlice';
+import { fetchLivePrices } from '../features/market/marketSlice';
 
 function Dashboard() {
   const dispatch = useDispatch();
-  const { drawdownStatus, dailyPerformance } = useSelector((state) => state.risk);
-  const { portfolio } = useSelector((state) => state.trading);
+  const { portfolio, positions, loading: tradingLoading } = useSelector((state) => state.trading);
   const { activeSignals } = useSelector((state) => state.signals);
+  const { drawdownStatus, dailyPerformance } = useSelector((state) => state.risk);
+  const { livePrices } = useSelector((state) => state.market);
+  const [equityCurve, setEquityCurve] = useState([]);
+  const [dailyPnL, setDailyPnL] = useState([]);
 
-  // Mock portfolio data
-  const mockPortfolio = {
-    balance: 10320.50,
-    equity: 10450.25,
-    margin: 500.00,
-    freeMargin: 9950.25,
-    unrealizedPnl: 129.75,
-    dailyPnl: 320.50,
-    dailyPnlPercent: 0.31,
-    drawdown: 2.5,
-  };
+  useEffect(() => {
+    dispatch(fetchPortfolio());
+    dispatch(fetchPositions());
+    dispatch(fetchActiveSignals());
+    dispatch(fetchDrawdownStatus());
+    dispatch(fetchDailyPerformance());
+    dispatch(fetchLivePrices());
+  }, [dispatch]);
 
-  const mockSignals = [
-    { symbol: 'EURUSD', direction: 'LONG', score: 85, timeframe: 'H1' },
-    { symbol: 'GBPUSD', direction: 'SHORT', score: 72, timeframe: 'M15' },
-    { symbol: 'USDJPY', direction: 'LONG', score: 68, timeframe: 'H4' },
-  ];
+  useEffect(() => {
+    if (dailyPerformance?.daily_pnl) {
+      setDailyPnL(dailyPerformance.daily_pnl.map((d) => ({
+        day: new Date(d.date).toLocaleDateString('en', { weekday: 'short' }),
+        pnl: d.pnl,
+      })));
+    }
+  }, [dailyPerformance]);
+
+  useEffect(() => {
+    if (portfolio?.equity_history) {
+      setEquityCurve(portfolio.equity_history.map((e) => ({
+        time: new Date(e.timestamp).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' }),
+        equity: parseFloat(e.equity),
+      })));
+    }
+  }, [portfolio]);
+
+  const balance = portfolio?.balance || 0;
+  const equity = portfolio?.equity || 0;
+  const margin = portfolio?.margin || 0;
+  const freeMargin = portfolio?.free_margin || 0;
+  const unrealizedPnl = portfolio?.unrealized_pnl || 0;
+  const dailyPnl = dailyPerformance?.today?.total_pnl || 0;
+  const dailyPnlPercent = dailyPerformance?.today?.win_rate || 0;
+  const drawdown = drawdownStatus?.drawdown_percent || 0;
+  const dailyTarget = dailyPerformance?.risk_parameters?.daily_growth_target || 0.14;
+
+  if (tradingLoading && !portfolio) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box>
@@ -65,14 +77,12 @@ function Dashboard() {
         Trading Dashboard
       </Typography>
 
-      {/* Daily Performance Alert */}
-      {mockPortfolio.dailyPnlPercent >= 0.4 && (
+      {dailyPnlPercent >= dailyTarget && (
         <Alert severity="success" sx={{ mb: 2 }}>
-          Daily target reached! Trading stopped at {mockPortfolio.dailyPnlPercent}% gain.
+          Daily target reached! Trading stopped at {dailyPnlPercent.toFixed(2)}% gain.
         </Alert>
       )}
 
-      {/* Portfolio Summary Cards */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} md={3}>
           <Card>
@@ -81,7 +91,7 @@ function Dashboard() {
                 <AccountBalance sx={{ color: 'primary.main', mr: 1 }} />
                 <Typography color="textSecondary">Balance</Typography>
               </Box>
-              <Typography variant="h5">${mockPortfolio.balance.toLocaleString()}</Typography>
+              <Typography variant="h5">${Number(balance).toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -92,7 +102,7 @@ function Dashboard() {
                 <TrendingUp sx={{ color: 'success.main', mr: 1 }} />
                 <Typography color="textSecondary">Equity</Typography>
               </Box>
-              <Typography variant="h5">${mockPortfolio.equity.toLocaleString()}</Typography>
+              <Typography variant="h5">${Number(equity).toLocaleString(undefined, { minimumFractionDigits: 2 })}</Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -100,15 +110,15 @@ function Dashboard() {
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                {mockPortfolio.dailyPnl >= 0 ? (
+                {dailyPnl >= 0 ? (
                   <TrendingUp sx={{ color: 'success.main', mr: 1 }} />
                 ) : (
                   <TrendingDown sx={{ color: 'error.main', mr: 1 }} />
                 )}
                 <Typography color="textSecondary">Daily P&L</Typography>
               </Box>
-              <Typography variant="h5" color={mockPortfolio.dailyPnl >= 0 ? 'success.main' : 'error.main'}>
-                ${mockPortfolio.dailyPnl.toLocaleString()} ({mockPortfolio.dailyPnlPercent}%)
+              <Typography variant="h5" color={dailyPnl >= 0 ? 'success.main' : 'error.main'}>
+                ${Number(dailyPnl).toFixed(2)} ({Number(unrealizedPnl).toFixed(2)})
               </Typography>
             </CardContent>
           </Card>
@@ -117,16 +127,16 @@ function Dashboard() {
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <Warning sx={{ color: mockPortfolio.drawdown > 10 ? 'error.main' : 'warning.main', mr: 1 }} />
+                <Warning sx={{ color: drawdown > 10 ? 'error.main' : 'warning.main', mr: 1 }} />
                 <Typography color="textSecondary">Drawdown</Typography>
               </Box>
-              <Typography variant="h5" color={mockPortfolio.drawdown > 10 ? 'error.main' : 'inherit'}>
-                {mockPortfolio.drawdown}%
+              <Typography variant="h5" color={drawdown > 10 ? 'error.main' : 'inherit'}>
+                {Number(drawdown).toFixed(2)}%
               </Typography>
               <LinearProgress
                 variant="determinate"
-                value={mockPortfolio.drawdown}
-                color={mockPortfolio.drawdown > 10 ? 'error' : 'primary'}
+                value={Math.min(drawdown / 15 * 100, 100)}
+                color={drawdown > 10 ? 'error' : 'primary'}
                 sx={{ mt: 1 }}
               />
             </CardContent>
@@ -134,7 +144,6 @@ function Dashboard() {
         </Grid>
       </Grid>
 
-      {/* Charts Row */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} md={8}>
           <Paper sx={{ p: 2 }}>
@@ -144,15 +153,8 @@ function Dashboard() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                 <XAxis dataKey="time" stroke="#888" />
                 <YAxis stroke="#888" />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#1a2940', border: '1px solid #333' }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="equity"
-                  stroke="#1976d2"
-                  fill="rgba(25, 118, 210, 0.3)"
-                />
+                <Tooltip contentStyle={{ backgroundColor: '#1a2940', border: '1px solid #333' }} />
+                <Area type="monotone" dataKey="equity" stroke="#1976d2" fill="rgba(25, 118, 210, 0.3)" />
               </AreaChart>
             </ResponsiveContainer>
           </Paper>
@@ -165,22 +167,14 @@ function Dashboard() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                 <XAxis dataKey="day" stroke="#888" />
                 <YAxis stroke="#888" />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#1a2940', border: '1px solid #333' }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="pnl"
-                  stroke="#4caf50"
-                  strokeWidth={2}
-                />
+                <Tooltip contentStyle={{ backgroundColor: '#1a2940', border: '1px solid #333' }} />
+                <Line type="monotone" dataKey="pnl" stroke="#4caf50" strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
           </Paper>
         </Grid>
       </Grid>
 
-      {/* Active Signals and Risk Status */}
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 2 }}>
@@ -199,20 +193,27 @@ function Dashboard() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {mockSignals.map((signal, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{signal.symbol}</TableCell>
+                  {(activeSignals || []).map((signal, index) => (
+                    <TableRow key={signal.id || index}>
+                      <TableCell>{signal.symbol?.name || signal.symbol}</TableCell>
                       <TableCell>
                         <Chip
-                          label={signal.direction}
-                          color={signal.direction === 'LONG' ? 'success' : 'error'}
+                          label={signal.signal_type || signal.direction}
+                          color={(signal.signal_type || signal.direction) === 'BUY' || (signal.signal_type || signal.direction) === 'LONG' ? 'success' : 'error'}
                           size="small"
                         />
                       </TableCell>
-                      <TableCell>{signal.score}%</TableCell>
-                      <TableCell>{signal.timeframe}</TableCell>
+                      <TableCell>{signal.strength || signal.score}%</TableCell>
+                      <TableCell>{signal.timeframe?.code || signal.timeframe}</TableCell>
                     </TableRow>
                   ))}
+                  {(!activeSignals || activeSignals.length === 0) && (
+                    <TableRow>
+                      <TableCell colSpan={4} align="center">
+                        <Typography color="textSecondary">No active signals</Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -227,30 +228,30 @@ function Dashboard() {
             <Box sx={{ mb: 2 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                 <Typography variant="body2">Daily Loss Limit</Typography>
-                <Typography variant="body2">0.5% / 2%</Typography>
+                <Typography variant="body2">{Number(drawdownStatus?.daily_pnl_percent || 0).toFixed(2)}% / 2%</Typography>
               </Box>
-              <LinearProgress variant="determinate" value={25} color="success" />
+              <LinearProgress variant="determinate" value={Math.min(Math.abs(drawdownStatus?.daily_pnl_percent || 0) / 2 * 100, 100)} color="success" />
             </Box>
             <Box sx={{ mb: 2 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                 <Typography variant="body2">Daily Trades</Typography>
-                <Typography variant="body2">3 / 10</Typography>
+                <Typography variant="body2">{drawdownStatus?.daily_trades_count || 0} / 10</Typography>
               </Box>
-              <LinearProgress variant="determinate" value={30} />
+              <LinearProgress variant="determinate" value={Math.min((drawdownStatus?.daily_trades_count || 0) / 10 * 100, 100)} />
             </Box>
             <Box sx={{ mb: 2 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                 <Typography variant="body2">Daily Target</Typography>
-                <Typography variant="body2">0.31% / 0.4%</Typography>
+                <Typography variant="body2">{Number(dailyPnlPercent).toFixed(2)}% / {dailyTarget}%</Typography>
               </Box>
-              <LinearProgress variant="determinate" value={77.5} color="warning" />
+              <LinearProgress variant="determinate" value={Math.min(dailyPnlPercent / dailyTarget * 100, 100)} color="warning" />
             </Box>
             <Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                 <Typography variant="body2">Max Drawdown</Typography>
-                <Typography variant="body2">2.5% / 15%</Typography>
+                <Typography variant="body2">{Number(drawdown).toFixed(2)}% / 15%</Typography>
               </Box>
-              <LinearProgress variant="determinate" value={16.7} />
+              <LinearProgress variant="determinate" value={Math.min(drawdown / 15 * 100, 100)} />
             </Box>
           </Paper>
         </Grid>

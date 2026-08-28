@@ -1,62 +1,35 @@
 import React, { useState } from 'react';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Box, Container, Paper, Typography, TextField, Button,
   Link, Alert, Grid
 } from '@mui/material';
 import { AccountBalance } from '@mui/icons-material';
-import { setCredentials } from '../features/auth/authSlice';
-import api from '../services/api';
+import { registerUser } from '../features/auth/authSlice';
 
 function Register() {
   const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    password: '',
-    password_confirm: '',
-    first_name: '',
-    last_name: ''
+    username: '', email: '', password: '', password_confirm: '',
+    first_name: '', last_name: ''
   });
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { loading, error } = useSelector((state) => state.auth);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (formData.password !== formData.password_confirm) {
-      setError('Passwords do not match');
       return;
     }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const response = await api.post('/auth/register/', formData);
-      dispatch(setCredentials({
-        user: response.data.user,
-        token: response.data.tokens.access
-      }));
+    const result = await dispatch(registerUser(formData));
+    if (!result.error) {
       navigate('/');
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Registration failed');
-    } finally {
-      setLoading(false);
     }
   };
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        bgcolor: 'background.default'
-      }}
-    >
+    <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default' }}>
       <Container maxWidth="sm">
         <Paper elevation={3} sx={{ p: 4 }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3 }}>
@@ -70,71 +43,32 @@ function Register() {
           <form onSubmit={handleSubmit}>
             <Grid container spacing={2}>
               <Grid item xs={6}>
-                <TextField
-                  fullWidth
-                  label="First Name"
-                  value={formData.first_name}
-                  onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                  required
-                />
+                <TextField fullWidth label="First Name" value={formData.first_name}
+                  onChange={(e) => setFormData({ ...formData, first_name: e.target.value })} required />
               </Grid>
               <Grid item xs={6}>
-                <TextField
-                  fullWidth
-                  label="Last Name"
-                  value={formData.last_name}
-                  onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                  required
-                />
+                <TextField fullWidth label="Last Name" value={formData.last_name}
+                  onChange={(e) => setFormData({ ...formData, last_name: e.target.value })} required />
               </Grid>
               <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Username"
-                  value={formData.username}
-                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  required
-                />
+                <TextField fullWidth label="Username" value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })} required />
               </Grid>
               <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  required
-                />
+                <TextField fullWidth label="Email" type="email" value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })} required />
               </Grid>
               <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Password"
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  required
-                />
+                <TextField fullWidth label="Password" type="password" value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })} required />
               </Grid>
               <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Confirm Password"
-                  type="password"
-                  value={formData.password_confirm}
-                  onChange={(e) => setFormData({ ...formData, password_confirm: e.target.value })}
-                  required
-                />
+                <TextField fullWidth label="Confirm Password" type="password" value={formData.password_confirm}
+                  onChange={(e) => setFormData({ ...formData, password_confirm: e.target.value })} required />
               </Grid>
             </Grid>
-            <Button
-              fullWidth
-              variant="contained"
-              type="submit"
-              size="large"
-              disabled={loading}
-              sx={{ mt: 3, mb: 2 }}
-            >
+            <Button fullWidth variant="contained" type="submit" size="large" disabled={loading}
+              sx={{ mt: 3, mb: 2 }}>
               {loading ? 'Creating Account...' : 'Create Account'}
             </Button>
           </form>

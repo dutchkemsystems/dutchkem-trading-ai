@@ -224,3 +224,44 @@ class DailyPerformanceView(APIView):
                 },
             }
         )
+
+
+class DailyTargetView(APIView):
+    """
+    Get daily target status and enforce target lock.
+    Three profiles: conservative (0.80%), moderate (1.45%), aggressive (2.20%)
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from .daily_target import DailyTargetLock
+
+        profile = request.query_params.get("profile", "moderate")
+        lock = DailyTargetLock(profile=profile)
+        status = lock.check_daily_status(request.user)
+        return Response(status)
+
+    def post(self, request):
+        from .daily_target import DailyTargetLock
+
+        profile = request.data.get("profile", "moderate")
+        lock = DailyTargetLock(profile=profile)
+        result = lock.enforce_daily_target(request.user)
+        return Response(result)
+
+
+class DailyTargetOverrideView(APIView):
+    """
+    Override daily target halt for emergency situations.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        from .daily_target import DailyTargetLock
+
+        reason = request.data.get("reason", "manual_override")
+        lock = DailyTargetLock()
+        result = lock.override_halt(request.user, reason=reason)
+        return Response(result)

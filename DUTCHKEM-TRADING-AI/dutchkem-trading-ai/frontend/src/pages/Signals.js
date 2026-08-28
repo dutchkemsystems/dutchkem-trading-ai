@@ -1,32 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import {
   Box, Grid, Paper, Typography, Card, CardContent, Chip,
   Table, TableBody, TableCell, TableContainer, TableHead,
-  TableRow, Button, LinearProgress, Alert, Tabs, Tab
+  TableRow, Button, LinearProgress, Alert, Tabs, Tab, CircularProgress
 } from '@mui/material';
 import { Speed, TrendingUp, TrendingDown, CheckCircle } from '@mui/icons-material';
+import { fetchActiveSignals, fetchConfluenceScores } from '../features/signals/signalsSlice';
 
 function Signals() {
+  const dispatch = useDispatch();
+  const { activeSignals, confluenceScores, loading, error } = useSelector((state) => state.signals);
   const [tabValue, setTabValue] = useState(0);
 
-  const activeSignals = [
-    { id: 1, symbol: 'EURUSD', direction: 'LONG', score: 85, level: 'STRONG', timeframe: 'H1', entry: 1.1200, sl: 1.1150, tp: 1.1300, rr: '1:2' },
-    { id: 2, symbol: 'GBPUSD', direction: 'SHORT', score: 72, level: 'MODERATE', timeframe: 'M15', entry: 1.3100, sl: 1.3150, tp: 1.3000, rr: '1:2' },
-    { id: 3, symbol: 'USDJPY', direction: 'LONG', score: 68, level: 'MODERATE', timeframe: 'H4', entry: 149.50, sl: 149.00, tp: 150.50, rr: '1:2' },
-    { id: 4, symbol: 'AUDUSD', direction: 'NEUTRAL', score: 45, level: 'WEAK', timeframe: 'M30', entry: null, sl: null, tp: null, rr: null },
-  ];
-
-  const confluenceScores = [
-    { symbol: 'EURUSD', m5: 65, m15: 70, m30: 75, h1: 85, h2: 80, h4: 78, total: 85, direction: 'LONG', aligned: true },
-    { symbol: 'GBPUSD', m5: 60, m15: 72, m30: 68, h1: 65, h2: 60, h4: 55, total: 72, direction: 'SHORT', aligned: false },
-    { symbol: 'USDJPY', m5: 55, m15: 60, m30: 65, h1: 70, h2: 75, h4: 68, total: 68, direction: 'LONG', aligned: false },
-  ];
+  useEffect(() => {
+    dispatch(fetchActiveSignals());
+    dispatch(fetchConfluenceScores());
+  }, [dispatch]);
 
   const getScoreColor = (score) => {
     if (score >= 80) return 'success';
     if (score >= 60) return 'warning';
     return 'error';
   };
+
+  const directionalSignals = (activeSignals || []).filter((s) => s.signal_type !== 'NEUTRAL');
+  const strongSignals = (activeSignals || []).filter((s) => s.strength >= 80);
+  const avgScore = directionalSignals.length > 0
+    ? Math.round(directionalSignals.reduce((a, b) => a + (b.strength || 0), 0) / directionalSignals.length)
+    : 0;
+
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box>
@@ -35,13 +45,14 @@ function Signals() {
         Trading Signals
       </Typography>
 
-      {/* Summary Cards */}
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
               <Typography color="textSecondary">Active Signals</Typography>
-              <Typography variant="h4">{activeSignals.filter(s => s.direction !== 'NEUTRAL').length}</Typography>
+              <Typography variant="h4">{directionalSignals.length}</Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -49,9 +60,7 @@ function Signals() {
           <Card>
             <CardContent>
               <Typography color="textSecondary">Strong Signals</Typography>
-              <Typography variant="h4" color="success.main">
-                {activeSignals.filter(s => s.level === 'STRONG').length}
-              </Typography>
+              <Typography variant="h4" color="success.main">{strongSignals.length}</Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -59,28 +68,24 @@ function Signals() {
           <Card>
             <CardContent>
               <Typography color="textSecondary">Average Score</Typography>
-              <Typography variant="h4">
-                {Math.round(activeSignals.filter(s => s.direction !== 'NEUTRAL').reduce((a, b) => a + b.score, 0) / activeSignals.filter(s => s.direction !== 'NEUTRAL').length)}%
-              </Typography>
+              <Typography variant="h4">{avgScore}%</Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid item xs={12} md={3}>
           <Card>
             <CardContent>
-              <Typography color="textSecondary">Win Rate (Today)</Typography>
-              <Typography variant="h4" color="success.main">62%</Typography>
+              <Typography color="textSecondary">Total Signals</Typography>
+              <Typography variant="h4">{(activeSignals || []).length}</Typography>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
 
-      {/* Tabs */}
       <Paper sx={{ p: 2 }}>
         <Tabs value={tabValue} onChange={(e, v) => setTabValue(v)} sx={{ mb: 2 }}>
           <Tab label="Active Signals" />
           <Tab label="Multi-Timeframe Confluence" />
-          <Tab label="Signal History" />
         </Tabs>
 
         {tabValue === 0 && (
@@ -97,53 +102,45 @@ function Signals() {
                   <TableCell>SL</TableCell>
                   <TableCell>TP</TableCell>
                   <TableCell>R:R</TableCell>
-                  <TableCell>Action</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {activeSignals.map((signal) => (
-                  <TableRow key={signal.id}>
-                    <TableCell>{signal.symbol}</TableCell>
-                    <TableCell>
-                      <Chip
-                        icon={signal.direction === 'LONG' ? <TrendingUp /> : signal.direction === 'SHORT' ? <TrendingDown /> : null}
-                        label={signal.direction}
-                        color={signal.direction === 'LONG' ? 'success' : signal.direction === 'SHORT' ? 'error' : 'default'}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <LinearProgress
-                          variant="determinate"
-                          value={signal.score}
-                          color={getScoreColor(signal.score)}
-                          sx={{ width: 100 }}
+                {activeSignals.map((signal) => {
+                  const level = signal.strength >= 80 ? 'STRONG' : signal.strength >= 60 ? 'MODERATE' : 'WEAK';
+                  return (
+                    <TableRow key={signal.id}>
+                      <TableCell>{signal.symbol?.name || signal.symbol}</TableCell>
+                      <TableCell>
+                        <Chip
+                          icon={signal.signal_type === 'BUY' ? <TrendingUp /> : <TrendingDown />}
+                          label={signal.signal_type}
+                          color={signal.signal_type === 'BUY' ? 'success' : 'error'}
+                          size="small"
                         />
-                        <Typography variant="body2">{signal.score}%</Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={signal.level}
-                        color={signal.level === 'STRONG' ? 'success' : signal.level === 'MODERATE' ? 'warning' : 'error'}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>{signal.timeframe}</TableCell>
-                    <TableCell>{signal.entry || '-'}</TableCell>
-                    <TableCell>{signal.sl || '-'}</TableCell>
-                    <TableCell>{signal.tp || '-'}</TableCell>
-                    <TableCell>{signal.rr || '-'}</TableCell>
-                    <TableCell>
-                      {signal.direction !== 'NEUTRAL' && (
-                        <Button variant="contained" size="small" color={signal.direction === 'LONG' ? 'success' : 'error'}>
-                          Trade
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <LinearProgress variant="determinate" value={signal.strength || 0}
+                            color={getScoreColor(signal.strength)} sx={{ width: 100 }} />
+                          <Typography variant="body2">{signal.strength}%</Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Chip label={level}
+                          color={level === 'STRONG' ? 'success' : level === 'MODERATE' ? 'warning' : 'error'}
+                          size="small" />
+                      </TableCell>
+                      <TableCell>{signal.timeframe?.code || signal.timeframe}</TableCell>
+                      <TableCell>{signal.entry_price || '-'}</TableCell>
+                      <TableCell>{signal.stop_loss || '-'}</TableCell>
+                      <TableCell>{signal.take_profit || '-'}</TableCell>
+                      <TableCell>{signal.risk_reward_ratio || '-'}</TableCell>
+                    </TableRow>
+                  );
+                })}
+                {activeSignals.length === 0 && (
+                  <TableRow><TableCell colSpan={9} align="center">No active signals</TableCell></TableRow>
+                )}
               </TableBody>
             </Table>
           </TableContainer>
@@ -167,54 +164,34 @@ function Signals() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {confluenceScores.map((item) => (
-                  <TableRow key={item.symbol}>
-                    <TableCell>{item.symbol}</TableCell>
+                {(confluenceScores || []).map((item) => (
+                  <TableRow key={item.symbol?.name || item.symbol || item.id}>
+                    <TableCell>{item.symbol?.name || item.symbol}</TableCell>
+                    {['m5', 'm15', 'm30', 'h1', 'h2', 'h4'].map((tf) => (
+                      <TableCell key={tf}>
+                        <Chip label={`${item[tf] || 0}%`} color={getScoreColor(item[tf] || 0)} size="small" />
+                      </TableCell>
+                    ))}
                     <TableCell>
-                      <Chip label={`${item.m5}%`} color={getScoreColor(item.m5)} size="small" />
-                    </TableCell>
-                    <TableCell>
-                      <Chip label={`${item.m15}%`} color={getScoreColor(item.m15)} size="small" />
-                    </TableCell>
-                    <TableCell>
-                      <Chip label={`${item.m30}%`} color={getScoreColor(item.m30)} size="small" />
-                    </TableCell>
-                    <TableCell>
-                      <Chip label={`${item.h1}%`} color={getScoreColor(item.h1)} size="small" />
-                    </TableCell>
-                    <TableCell>
-                      <Chip label={`${item.h2}%`} color={getScoreColor(item.h2)} size="small" />
-                    </TableCell>
-                    <TableCell>
-                      <Chip label={`${item.h4}%`} color={getScoreColor(item.h4)} size="small" />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="h6" color={getScoreColor(item.total) + '.main'}>
-                        {item.total}%
+                      <Typography variant="h6" color={getScoreColor(item.total || 0) + '.main'}>
+                        {item.total || 0}%
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        label={item.direction}
-                        color={item.direction === 'LONG' ? 'success' : item.direction === 'SHORT' ? 'error' : 'default'}
-                      />
+                      <Chip label={item.direction || item.signal_type}
+                        color={item.direction === 'BUY' || item.signal_type === 'BUY' ? 'success' : 'error'} />
                     </TableCell>
                     <TableCell>
-                      {item.aligned ? (
-                        <CheckCircle color="success" />
-                      ) : (
-                        <Typography color="textSecondary">-</Typography>
-                      )}
+                      {item.aligned ? <CheckCircle color="success" /> : <Typography color="textSecondary">-</Typography>}
                     </TableCell>
                   </TableRow>
                 ))}
+                {confluenceScores.length === 0 && (
+                  <TableRow><TableCell colSpan={10} align="center">No confluence data available</TableCell></TableRow>
+                )}
               </TableBody>
             </Table>
           </TableContainer>
-        )}
-
-        {tabValue === 2 && (
-          <Alert severity="info">Signal history will show past signals with outcomes.</Alert>
         )}
       </Paper>
     </Box>

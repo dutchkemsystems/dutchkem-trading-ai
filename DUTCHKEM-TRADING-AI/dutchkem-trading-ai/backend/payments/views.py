@@ -1,5 +1,12 @@
+import hashlib
+import hmac
+import json
+import logging
+import os
+
+from django.db.models import F
 from django.utils import timezone
-from rest_framework import generics, permissions
+from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -12,6 +19,9 @@ from .serializers import (
     UserPaymentMethodSerializer,
     WithdrawalSerializer,
 )
+from .services import PaymentService
+
+logger = logging.getLogger("payments")
 
 
 class PaymentGatewayListView(generics.ListAPIView):
@@ -28,78 +38,179 @@ class TransactionListView(generics.ListAPIView):
         tx_type = self.request.query_params.get("type")
         if tx_type:
             queryset = queryset.filter(transaction_type=tx_type)
+        tx_status = self.request.query_params.get("status")
+        if tx_status:
+            queryset = queryset.filter(status=tx_status)
         return queryset
 
 
-class DepositView(APIView):
+class TransactionDetailView(generics.RetrieveAPIView):
+    serializer_class = TransactionSerializer
+
+    def get_queryset(self):
+        return Transaction.objects.filter(user=self.request.user)
+
+
+class InitializeDepositView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         serializer = DepositSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        gateway = PaymentGateway.objects.get(id=serializer.validated_data["gateway"])
-        amount = serializer.validated_data["amount"]
+        service = PaymentService()
+        try:
+            redirect_url = serializer.validated_data.get("redirect_url", "")
+            if not redirect_url:
+                frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+                redirect_url = f"{frontend_url}/payments/callback"
 
-        # Validate limits
-        if amount < gateway.min_deposit:
-            return Response({"error": f"Minimum deposit is {gateway.min_deposit}"}, status=400)
-        if gateway.max_deposit and amount > gateway.max_deposit:
-            return Response({"error": f"Maximum deposit is {gateway.max_deposit}"}, status=400)
+            tx = service.create_deposit(
+                user=request.user,
+                amount=serializer.validated_data["amount"],
+                currency=serializer.validated_data.get("currency", "NGN"),
+                gateway_id=serializer.validated_data.get("gateway"),
+                channel=serializer.validated_data.get("channel", ""),
+                redirect_url=redirect_url,
+            )
 
-        fee = amount * (gateway.deposit_fee_percent / 100)
-        net_amount = amount - fee
+            checkout_url = ""
+            access_code = ""
+            if tx.gateway_response:
+                data_section = tx.gateway_response.get("data", {})
+                checkout_url = data_section.get("authorization_url", data_section.get("checkout_url", ""))
+                access_code = data_section.get("access_code", "")
 
-        transaction = Transaction.objects.create(
-            user=request.user,
-            transaction_type="DEPOSIT",
-            amount=amount,
-            gateway=gateway,
-            fee=fee,
-            net_amount=net_amount,
-            status="PENDING",
-        )
+            return Response(
+                {
+                    "transaction_id": str(tx.id),
+                    "reference": tx.korapay_ref,
+                    "amount": str(tx.amount),
+                    "currency": tx.currency,
+                    "status": tx.status,
+                    "checkout_url": checkout_url,
+                    "access_code": access_code,
+                    "fee": str(tx.fee),
+                    "net_amount": str(tx.net_amount),
+                },
+                status=status.HTTP_201_CREATED,
+            )
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-        return Response(TransactionSerializer(transaction).data, status=201)
+
+class VerifyDepositView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        reference = request.data.get("reference")
+        if not reference:
+            return Response({"error": "Reference is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        service = PaymentService()
+        try:
+            tx = service.verify_deposit(reference)
+            return Response(
+                {
+                    "transaction_id": str(tx.id),
+                    "reference": tx.korapay_ref,
+                    "status": tx.status,
+                    "amount": str(tx.amount),
+                    "currency": tx.currency,
+                    "completed_at": tx.completed_at.isoformat() if tx.completed_at else None,
+                }
+            )
+        except Transaction.DoesNotExist:
+            return Response({"error": "Transaction not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
-class WithdrawalView(APIView):
+class CreateWithdrawalView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         serializer = WithdrawalSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        gateway = PaymentGateway.objects.get(id=serializer.validated_data["gateway"])
-        amount = serializer.validated_data["amount"]
+        service = PaymentService()
+        try:
+            tx = service.create_withdrawal(
+                user=request.user,
+                amount=serializer.validated_data["amount"],
+                currency=serializer.validated_data.get("currency", "NGN"),
+                gateway_id=serializer.validated_data.get("gateway"),
+                channel=serializer.validated_data.get("channel", ""),
+            )
+            return Response(TransactionSerializer(tx).data, status=status.HTTP_201_CREATED)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Check KYC
-        kyc = KYCVerification.objects.filter(user=request.user, status="VERIFIED").first()
-        if not kyc:
-            return Response({"error": "KYC verification required for withdrawals"}, status=400)
 
-        # Check balance
-        if amount > request.user.balance:
-            return Response({"error": "Insufficient balance"}, status=400)
+class KorapayWebhookView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
 
-        # Validate limits
-        if amount < gateway.min_withdrawal:
-            return Response({"error": f"Minimum withdrawal is {gateway.min_withdrawal}"}, status=400)
+    def post(self, request):
+        signature = request.headers.get("x-korapay-signature", "")
+        raw_body = request.body
 
-        fee = amount * (gateway.withdrawal_fee_percent / 100)
-        net_amount = amount - fee
+        webhook_secret = os.environ.get("KORA_WEBHOOK_SECRET", "")
+        if webhook_secret:
+            expected = hmac.new(
+                webhook_secret.encode(), raw_body, hashlib.sha256
+            ).hexdigest()
+            if not hmac.compare_digest(expected, signature):
+                logger.warning("Invalid Korapay webhook signature")
+                return Response({"error": "Invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
 
-        transaction = Transaction.objects.create(
-            user=request.user,
-            transaction_type="WITHDRAWAL",
-            amount=amount,
-            gateway=gateway,
-            fee=fee,
-            net_amount=net_amount,
-            status="PENDING",
-        )
+        body = request.data
+        event_data = {
+            "event_type": body.get("event", ""),
+            "reference": body.get("data", {}).get("reference", ""),
+            "status": body.get("data", {}).get("status", ""),
+            "amount": body.get("data", {}).get("amount", 0),
+            "currency": body.get("data", {}).get("currency", ""),
+            "channel": body.get("data", {}).get("channel", ""),
+            "metadata": body.get("data", {}).get("metadata", {}),
+            "paid_at": body.get("data", {}).get("paid_at"),
+        }
 
-        return Response(TransactionSerializer(transaction).data, status=201)
+        service = PaymentService()
+        result = service.handle_webhook(event_data)
+        return Response(result)
+
+
+class PaymentCallbackView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        reference = request.query_params.get("reference", "")
+        trxref = request.query_params.get("trxref", "")
+        ref = reference or trxref
+
+        if not ref:
+            return Response({"error": "No reference provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+        service = PaymentService()
+        try:
+            tx = service.verify_deposit(ref)
+            frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+            from django.shortcuts import redirect
+            return redirect(f"{frontend_url}/payments?status={tx.status}&reference={ref}")
+        except Transaction.DoesNotExist:
+            frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+            from django.shortcuts import redirect
+            return redirect(f"{frontend_url}/payments?status=FAILED&reference={ref}")
+
+
+class ReconcileView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def post(self, request):
+        days = request.data.get("days", 7)
+        service = PaymentService()
+        result = service.reconcile_transactions(days=days)
+        return Response(result)
 
 
 class KYCSubmitView(APIView):
@@ -108,10 +219,8 @@ class KYCSubmitView(APIView):
     def post(self, request):
         serializer = KYCVerificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
         kyc = serializer.save(user=request.user, status="PENDING", submitted_at=timezone.now())
-
-        return Response(KYCVerificationSerializer(kyc).data, status=201)
+        return Response(KYCVerificationSerializer(kyc).data, status=status.HTTP_201_CREATED)
 
 
 class KYCStatusView(APIView):
@@ -136,8 +245,3 @@ class PaymentMethodCreateView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
-
-
-class TransactionDetailView(generics.RetrieveAPIView):
-    queryset = Transaction.objects.all()
-    serializer_class = TransactionSerializer
