@@ -39,7 +39,9 @@ class SignalHistoryView(generics.ListAPIView):
     serializer_class = SignalHistorySerializer
 
     def get_queryset(self):
-        return SignalHistory.objects.filter(signal__user=self.request.user)[:100]
+        # Signal model has no user FK — return recent history for active symbols
+        qs = SignalHistory.objects.select_related("signal", "signal__symbol", "signal__timeframe")
+        return qs.order_by("-closed_at")[:100]
 
 
 class ConfluenceScoreListView(generics.ListAPIView):
@@ -59,18 +61,53 @@ class SignalGenerateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        import logging
+        from strategies.confluence import confluence_engine
+        from trading.models import Symbol
+        from indicators.models import Timeframe
+
+        logger = logging.getLogger("signals")
+
         serializer = SignalGenerateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        # This would trigger the AI signal generation pipeline
-        # Using @devhive orchestration, @gstack agents, @minimax generation
-        return Response(
-            {
-                "status": "signal_generation_queued",
-                "symbol": serializer.validated_data["symbol"],
-                "timeframe": serializer.validated_data["timeframe"],
-            }
-        )
+        symbol_name = serializer.validated_data.get("symbol", "EURUSD")
+        timeframe_code = serializer.validated_data.get("timeframe", "H1")
+
+        # Get symbols to generate signals for
+        symbols = Symbol.objects.filter(is_active=True)
+        if symbol_name:
+            symbols = symbols.filter(name=symbol_name)
+
+        # Resolve the default timeframe FK for new signals
+        try:
+            default_timeframe = Timeframe.objects.get(code=timeframe_code)
+        except Timeframe.DoesNotExist:
+            default_timeframe = Timeframe.objects.filter(is_active=True).first()
+
+        signals_created = []
+        for symbol in symbols:
+            try:
+                # Use confluence engine to generate signal
+                result = confluence_engine.analyze_symbol(symbol.name)
+                if result and result.get("should_trade"):
+                    signal = Signal.objects.create(
+                        symbol=symbol,
+                        timeframe=default_timeframe,
+                        signal_type=result.get("direction", "NEUTRAL"),
+                        strength=result.get("total_score", 0),
+                        confluence_score=result.get("total_score", 0),
+                        generated_by="api_request",
+                    )
+                    signals_created.append(str(signal.id))
+            except Exception as exc:
+                logger.error("Signal generation failed for %s: %s", symbol.name, exc)
+
+        return Response({
+            "status": "success",
+            "signals_created": len(signals_created),
+            "signal_ids": signals_created,
+        })
 
 
 class ActiveSignalsView(APIView):

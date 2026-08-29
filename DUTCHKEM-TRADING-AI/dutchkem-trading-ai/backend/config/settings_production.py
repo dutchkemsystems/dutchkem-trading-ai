@@ -43,6 +43,10 @@ INSTALLED_APPS = [
     "market_data",
     "notifications",
     "analytics",
+    "referrals",
+    "backtesting",
+    "ml",
+    "gold_edge",
 ]
 
 MIDDLEWARE = [
@@ -127,6 +131,7 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [BASE_DIR / "static"]
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL = "/media/"

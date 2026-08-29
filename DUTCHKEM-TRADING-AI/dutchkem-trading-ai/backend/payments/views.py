@@ -4,6 +4,7 @@ import json
 import logging
 import os
 
+from django.db import models
 from django.db.models import F
 from django.utils import timezone
 from rest_framework import generics, permissions, status
@@ -140,9 +141,74 @@ class CreateWithdrawalView(APIView):
                 gateway_id=serializer.validated_data.get("gateway"),
                 channel=serializer.validated_data.get("channel", ""),
             )
-            return Response(TransactionSerializer(tx).data, status=status.HTTP_201_CREATED)
+            return Response(
+                {
+                    "transaction_id": str(tx.id),
+                    "reference": tx.korapay_ref,
+                    "amount": str(tx.amount),
+                    "currency": tx.currency,
+                    "status": tx.status,
+                    "fee": str(tx.fee),
+                    "net_amount": str(tx.net_amount),
+                },
+                status=status.HTTP_201_CREATED,
+            )
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class WithdrawalStatusView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, transaction_id):
+        try:
+            tx = Transaction.objects.get(
+                id=transaction_id,
+                user=request.user,
+                transaction_type="WITHDRAWAL",
+            )
+            return Response(
+                {
+                    "transaction_id": str(tx.id),
+                    "reference": tx.korapay_ref,
+                    "status": tx.status,
+                    "amount": str(tx.amount),
+                    "currency": tx.currency,
+                    "fee": str(tx.fee),
+                    "net_amount": str(tx.net_amount),
+                    "created_at": tx.created_at.isoformat(),
+                    "completed_at": tx.completed_at.isoformat() if tx.completed_at else None,
+                }
+            )
+        except Transaction.DoesNotExist:
+            return Response(
+                {"error": "Transaction not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+
+class UserBalanceView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        total_deposits = Transaction.objects.filter(
+            user=user, transaction_type="DEPOSIT", status="COMPLETED"
+        ).aggregate(total=models.Sum("net_amount"))["total"] or 0
+
+        total_withdrawals = Transaction.objects.filter(
+            user=user, transaction_type="WITHDRAWAL", status="COMPLETED"
+        ).aggregate(total=models.Sum("amount"))["total"] or 0
+
+        return Response(
+            {
+                "balance": str(user.balance),
+                "equity": str(user.equity),
+                "total_deposits": str(total_deposits),
+                "total_withdrawals": str(total_withdrawals),
+                "currency": user.preferred_currency,
+            }
+        )
 
 
 class KorapayWebhookView(APIView):
@@ -154,13 +220,15 @@ class KorapayWebhookView(APIView):
         raw_body = request.body
 
         webhook_secret = os.environ.get("KORA_WEBHOOK_SECRET", "")
-        if webhook_secret:
-            expected = hmac.new(
-                webhook_secret.encode(), raw_body, hashlib.sha256
-            ).hexdigest()
-            if not hmac.compare_digest(expected, signature):
-                logger.warning("Invalid Korapay webhook signature")
-                return Response({"error": "Invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
+        if not webhook_secret:
+            logger.warning("KORA_WEBHOOK_SECRET not set, rejecting webhook")
+            return Response({"error": "Webhook secret not configured"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        expected = hmac.HMAC(
+            webhook_secret.encode(), raw_body, hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(expected, signature):
+            logger.warning("Invalid Korapay webhook signature")
+            return Response({"error": "Invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
 
         body = request.data
         event_data = {

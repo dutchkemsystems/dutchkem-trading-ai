@@ -11,6 +11,36 @@ from django.conf import settings
 logger = logging.getLogger("mcp_integration")
 
 
+class CircuitBreaker:
+    def __init__(self, failure_threshold=5, recovery_timeout=60):
+        self.failure_threshold = failure_threshold
+        self.recovery_timeout = recovery_timeout
+        self.failure_count = 0
+        self.state = "closed"  # closed = normal, open = blocking, half_open = testing
+        self.last_failure_time = None
+
+    def record_failure(self):
+        self.failure_count += 1
+        self.last_failure_time = time.time()
+        if self.failure_count >= self.failure_threshold:
+            self.state = "open"
+            logger.warning("Circuit breaker OPEN - MT5 requests will be blocked")
+
+    def record_success(self):
+        self.failure_count = 0
+        self.state = "closed"
+
+    def allow_request(self):
+        if self.state == "closed":
+            return True
+        if self.state == "open":
+            if time.time() - self.last_failure_time > self.recovery_timeout:
+                self.state = "half_open"
+                return True
+            return False
+        return True  # half_open allows one request
+
+
 class MT5ConnectionConfig:
     def __init__(self):
         self.host = getattr(settings, "MT5_HOST", "localhost")
@@ -46,6 +76,7 @@ class MT5Service:
         self._request_count = 0
         self._error_count = 0
         self._total_latency = 0.0
+        self.circuit_breaker = CircuitBreaker()
 
     @classmethod
     def get_instance(cls) -> "MT5Service":
@@ -80,6 +111,9 @@ class MT5Service:
     async def _request(
         self, method: str, path: str, data: Optional[Dict] = None
     ) -> Dict[str, Any]:
+        if not self.circuit_breaker.allow_request():
+            raise Exception("Circuit breaker is OPEN - MT5 requests blocked")
+
         session = await self._get_session()
         url = f"{self.config.base_url}{path}"
         start = time.time()
@@ -91,6 +125,7 @@ class MT5Service:
                     self._request_count += 1
                     self._total_latency += latency
                     body = await resp.json()
+                    self.circuit_breaker.record_success()
                     return body
             else:
                 async with session.request(method, url, json=data) as resp:
@@ -98,13 +133,16 @@ class MT5Service:
                     self._request_count += 1
                     self._total_latency += latency
                     body = await resp.json()
+                    self.circuit_breaker.record_success()
                     return body
         except aiohttp.ClientError as e:
             self._error_count += 1
+            self.circuit_breaker.record_failure()
             logger.error("MT5 HTTP error: %s %s — %s", method, path, e)
             raise
         except Exception as e:
             self._error_count += 1
+            self.circuit_breaker.record_failure()
             logger.error("MT5 request error: %s %s — %s", method, path, e)
             raise
 

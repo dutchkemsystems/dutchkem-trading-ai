@@ -140,6 +140,29 @@ class DailyRiskManager:
         self.stop_reason = None
         return TradingStatus.ALLOWED
     
+    # Standard contract sizes and pip sizes per symbol type
+    SYMBOL_CONFIGS = {
+        'forex': {'contract_size': 100000, 'pip_size': Decimal('0.0001')},
+        'jpy': {'contract_size': 100000, 'pip_size': Decimal('0.01')},
+        'gold': {'contract_size': 100, 'pip_size': Decimal('0.01')},
+        'silver': {'contract_size': 5000, 'pip_size': Decimal('0.001')},
+        'crypto_btc': {'contract_size': 1, 'pip_size': Decimal('0.01')},
+    }
+
+    @staticmethod
+    def _get_symbol_config(symbol: str) -> dict:
+        """Resolve contract_size and pip_size for a given symbol."""
+        sym_upper = symbol.upper()
+        if 'XAU' in sym_upper or 'GOLD' in sym_upper:
+            return DailyRiskManager.SYMBOL_CONFIGS['gold']
+        if 'XAG' in sym_upper or 'SILVER' in sym_upper:
+            return DailyRiskManager.SYMBOL_CONFIGS['silver']
+        if 'BTC' in sym_upper or 'ETH' in sym_upper:
+            return DailyRiskManager.SYMBOL_CONFIGS['crypto_btc']
+        if any(pair in sym_upper for pair in ('JPY',)):
+            return DailyRiskManager.SYMBOL_CONFIGS['jpy']
+        return DailyRiskManager.SYMBOL_CONFIGS['forex']
+
     def calculate_position_size(
         self,
         stop_loss_pips: int,
@@ -147,12 +170,15 @@ class DailyRiskManager:
         symbol: str = ''
     ) -> Decimal:
         """
-        Calculate position size based on daily risk budget
+        Calculate position size based on daily risk budget.
+        
+        Formula: position_size = risk_amount / (stop_loss_pips * pip_value)
+        where pip_value = contract_size * pip_size
         
         Args:
             stop_loss_pips: Stop loss in pips
             risk_per_trade: Risk per trade (default 1%)
-            symbol: Trading symbol
+            symbol: Trading symbol (used to determine contract/pip sizes)
             
         Returns:
             Position size in lots
@@ -165,9 +191,13 @@ class DailyRiskManager:
         if remaining_daily_budget < risk_amount:
             risk_amount = remaining_daily_budget
         
-        # Calculate position size
+        # Calculate position size with correct pip_value
         if stop_loss_pips > 0:
-            position_size = risk_amount / Decimal(str(stop_loss_pips))
+            config = self._get_symbol_config(symbol)
+            contract_size = Decimal(str(config['contract_size']))
+            pip_size = config['pip_size']
+            pip_value = contract_size * pip_size  # e.g., 100000 * 0.0001 = 10
+            position_size = risk_amount / (Decimal(str(stop_loss_pips)) * pip_value)
         else:
             position_size = Decimal('0')
         
@@ -301,6 +331,177 @@ class DailyRiskManager:
         
         status = self.check_daily_limits()
         return status == TradingStatus.ALLOWED
+    
+    def equity_curve_check(self, equity_history: List[Decimal]) -> bool:
+        """
+        Equity Curve Trading: Check if current equity is above its 20-period moving average.
+        If equity is below the MA, reduce position size by 50%.
+        
+        Args:
+            equity_history: List of recent equity values (at least 20)
+            
+        Returns:
+            True if equity is above MA (normal trading), False if below (reduce size)
+        """
+        if len(equity_history) < 20:
+            return True  # Not enough data, assume OK
+        
+        # Calculate 20-period moving average of equity
+        recent_20 = equity_history[-20:]
+        ma_20 = sum(recent_20) / len(recent_20)
+        
+        current_equity = equity_history[-1]
+        
+        if current_equity < ma_20:
+            self._add_alert(
+                'EQUITY_CURVE_BELOW_MA',
+                'MEDIUM',
+                f'Equity ({current_equity}) is below 20-period MA ({ma_20:.2f}). '
+                f'Reducing position size by 50%.',
+                {
+                    'current_equity': str(current_equity),
+                    'ma_20': str(ma_20),
+                    'reduction': '50%'
+                }
+            )
+            return False  # Signal to reduce position size
+        
+        return True  # Normal trading allowed
+    
+    def calculate_position_size_with_equity_curve(
+        self,
+        stop_loss_pips: int,
+        risk_per_trade: Decimal = Decimal('0.01'),
+        symbol: str = '',
+        equity_history: Optional[List[Decimal]] = None,
+    ) -> Decimal:
+        """
+        Calculate position size with equity curve trading overlay.
+        If equity is below its 20-period MA, position size is halved.
+        """
+        base_size = self.calculate_position_size(stop_loss_pips, risk_per_trade, symbol)
+        
+        if equity_history is not None and not self.equity_curve_check(equity_history):
+            base_size = base_size * Decimal('0.5')
+        
+        return round(base_size, 2)
+    
+    def kelly_criterion(
+        self,
+        win_rate: float,
+        avg_win: float,
+        avg_loss: float,
+        use_half_kelly: bool = True,
+    ) -> float:
+        """
+        Calculate optimal position size using Kelly Criterion.
+        
+        Args:
+            win_rate: Probability of winning (0-1)
+            avg_win: Average winning trade amount
+            avg_loss: Average losing trade amount (positive value)
+            use_half_kelly: If True, use half-Kelly for safety (default)
+            
+        Returns:
+            Optimal fraction of bankroll to risk (0-1)
+        """
+        if avg_loss <= 0 or win_rate <= 0 or win_rate >= 1:
+            return 0.0
+        
+        # b = ratio of average win to average loss
+        b = avg_win / avg_loss if avg_loss > 0 else 0
+        
+        if b <= 0:
+            return 0.0
+        
+        # Kelly formula: f* = (bp - q) / b
+        # where p = win_rate, q = 1 - win_rate
+        kelly = (b * win_rate - (1 - win_rate)) / b
+        
+        # Kelly can be negative (don't bet), so clamp to 0
+        kelly = max(0.0, kelly)
+        
+        # Apply half-Kelly for safety if requested
+        if use_half_kelly:
+            kelly = kelly * 0.5
+        
+        # Cap at 25% maximum risk (Kelly can suggest too aggressive)
+        return min(kelly, 0.25)
+    
+    def calculate_kelly_position_size(
+        self,
+        stop_loss_pips: int,
+        win_rate: float,
+        avg_win: float,
+        avg_loss: float,
+        symbol: str = '',
+    ) -> Decimal:
+        """
+        Calculate position size using Kelly Criterion instead of fixed % risk.
+        
+        Args:
+            stop_loss_pips: Stop loss in pips
+            win_rate: Historical win rate for this setup
+            avg_win: Average winning trade amount
+            avg_loss: Average losing trade amount (positive)
+            symbol: Trading symbol
+            
+        Returns:
+            Position size in lots
+        """
+        kelly_fraction = self.kelly_criterion(win_rate, avg_win, avg_loss)
+        
+        if kelly_fraction <= 0:
+            return Decimal('0')
+        
+        # Risk amount based on Kelly fraction of equity
+        risk_amount = self.equity * Decimal(str(kelly_fraction))
+        
+        # Adjust based on remaining daily loss budget
+        remaining_daily_budget = (self.daily_loss_limit * self.equity) + self.current_daily_pnl
+        if remaining_daily_budget < risk_amount:
+            risk_amount = max(remaining_daily_budget, Decimal('0'))
+        
+        # Calculate position size
+        if stop_loss_pips > 0:
+            contract_size = Decimal('100000')
+            pip_size = Decimal('0.0001')
+            pip_value = contract_size * pip_size
+            position_size = risk_amount / (Decimal(str(stop_loss_pips)) * pip_value)
+        else:
+            position_size = Decimal('0')
+        
+        # Cap at max position size
+        max_size = self.equity * self.max_position_size
+        if position_size > max_size:
+            position_size = max_size
+        
+        return round(position_size, 2)
+    
+    @staticmethod
+    def kelly_criterion(
+        win_rate: float, avg_win: float, avg_loss: float, fraction: float = 0.35
+    ) -> float:
+        """
+        Kelly Criterion position sizing.
+
+        Returns the optimal fraction of equity to risk, scaled down by
+        *fraction* (default 0.35, i.e. fractional Kelly) for safety.
+
+        Args:
+            win_rate:   probability of a win (0.0 – 1.0)
+            avg_win:    average winning trade P&L (absolute value)
+            avg_loss:   average losing trade P&L (absolute value)
+            fraction:   fraction of full Kelly to use (0.0 – 1.0)
+        
+        Returns:
+            Fraction of equity to risk (0.0 if calculation yields negative).
+        """
+        if avg_loss <= 0 or win_rate <= 0:
+            return 0.0
+        b = avg_win / avg_loss  # payoff ratio
+        kelly = (win_rate * b - (1 - win_rate)) / b
+        return max(0.0, kelly * fraction)
     
     def get_risk_report(self) -> Dict[str, Any]:
         """Generate comprehensive risk report"""

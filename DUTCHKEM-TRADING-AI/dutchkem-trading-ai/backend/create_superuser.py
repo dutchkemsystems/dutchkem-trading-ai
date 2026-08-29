@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import django
@@ -5,10 +6,12 @@ import django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.local_settings')
 django.setup()
 
+logger = logging.getLogger(__name__)
+
 from accounts.models import User
 
 if User.objects.filter(username='admin').exists():
-    print('User admin already exists')
+    logger.info('User admin already exists')
 else:
     user = User.objects.create_superuser(
         username='admin',
@@ -17,4 +20,4 @@ else:
         first_name='Admin',
         last_name='User',
     )
-    print(f'Created superuser: {user.username} (id={user.id})')
+    logger.info('Created superuser: %s (id=%s)', user.username, user.id)

@@ -21,6 +21,15 @@ class MarketDataConsumer(AsyncWebsocketConsumer):
         self._last_heartbeat = time.time()
         self._is_subscribed = False
 
+        # Connection limit per user
+        from django.core.cache import cache
+        user_key = f"ws_connections_{self.scope.get('user', {}).get('id', 'anonymous')}"
+        current_connections = cache.get(user_key, 0)
+        if current_connections >= 5:  # Max 5 connections per user
+            await self.close()
+            return
+        cache.set(user_key, current_connections + 1, timeout=300)
+
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
 
@@ -42,6 +51,13 @@ class MarketDataConsumer(AsyncWebsocketConsumer):
         await self._subscribe_to_mt5_ticks()
 
     async def disconnect(self, close_code):
+        # Decrement connection counter
+        from django.core.cache import cache
+        user_key = f"ws_connections_{self.scope.get('user', {}).get('id', 'anonymous')}"
+        current_connections = cache.get(user_key, 0)
+        if current_connections > 0:
+            cache.set(user_key, current_connections - 1, timeout=300)
+
         await self._unsubscribe_from_mt5_ticks()
         await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
         logger.info("Client disconnected from %s: %s", self.symbol, close_code)

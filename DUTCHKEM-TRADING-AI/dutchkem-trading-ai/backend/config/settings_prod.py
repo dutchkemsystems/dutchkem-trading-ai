@@ -8,7 +8,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Security
 DEBUG = os.environ.get("DEBUG", "False") == "True"
-SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-fallback-key")
+SECRET_KEY = os.environ.get("SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY environment variable is required in production")
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",")
 
 # Database
@@ -42,7 +44,7 @@ CACHES = {
 }
 
 # Celery
-CELERY_BROKER_URL = os.environ.get("CELERY_Broker_URL", "amqp://guest:guest@rabbitmq:5672//")
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", os.environ.get("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672//"))
 CELERY_RESULT_BACKEND = "django-db"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
@@ -56,6 +58,7 @@ CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60
 INFLUXDB_URL = os.environ.get("INFLUXDB_URL", "http://influxdb:8086")
 INFLUXDB_TOKEN = os.environ.get("INFLUXDB_TOKEN")
 INFLUXDB_ORG = os.environ.get("INFLUXDB_ORG", "dutchkem")
+INFLUXDB_BUCKET = os.environ.get("INFLUXDB_BUCKET", "market_data")
 
 # CORS
 CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
@@ -63,6 +66,22 @@ CORS_ALLOW_CREDENTIALS = True
 
 # CSRF
 CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
+
+# Static Files
+LANGUAGE_CODE = "en-us"
+TIME_ZONE = "UTC"
+USE_I18N = True
+USE_TZ = True
+
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [BASE_DIR / "static"]
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Security Headers
 SECURE_BROWSER_XSS_FILTER = True
@@ -157,4 +176,30 @@ LOGGING = {
             "propagate": False,
         },
     },
+}
+
+# MetaTrader 5
+MT5_HOST = os.environ.get("MT5_HOST", "localhost")
+MT5_PORT = int(os.environ.get("MT5_PORT", 3000))
+MT5_WS_PORT = int(os.environ.get("MT5_WS_PORT", 3001))
+MT5_TIMEOUT = int(os.environ.get("MT5_TIMEOUT", 10))
+MT5_MAX_RETRIES = int(os.environ.get("MT5_MAX_RETRIES", 5))
+MT5_RETRY_DELAY = float(os.environ.get("MT5_RETRY_DELAY", 2.0))
+
+# Korapay (Payments)
+KORA_SECRET_KEY = os.environ.get("KORA_SECRET_KEY", "")
+KORA_PUBLIC_KEY = os.environ.get("KORA_PUBLIC_KEY", "")
+KORA_ENCRYPTION_KEY = os.environ.get("KORA_ENCRYPTION_KEY", "")
+KORA_WEBHOOK_SECRET = os.environ.get("KORA_WEBHOOK_SECRET", "")
+KORA_BASE_URL = os.environ.get("KORA_BASE_URL", "https://api.korapay.com/merchant/api/v1")
+
+# Trading Configuration
+TRADING_CONFIG = {
+    "MAX_DRAWDOWN": 0.15,
+    "MAX_DAILY_LOSS": 0.03,
+    "MAX_POSITION_SIZE": 0.02,
+    "MAX_OPEN_POSITIONS": 5,
+    "MAX_CORRELATION": 0.7,
+    "MIN_RISK_REWARD_RATIO": 2.0,
+    "TARGET_ANNUAL_GROWTH": 0.40,
 }

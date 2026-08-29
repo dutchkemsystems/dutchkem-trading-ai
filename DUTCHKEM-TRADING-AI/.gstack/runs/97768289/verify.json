@@ -1,0 +1,106 @@
+{
+  "runId": "97768289",
+  "profile": "full",
+  "archetype": "unknown",
+  "status": "timed_out",
+  "ready": false,
+  "usable": false,
+  "reducedTrust": false,
+  "qg": {
+    "origin": "gstack",
+    "path": "C:\\Users\\Lenovo\\.gstack\\hooks\\qg.py",
+    "version": "5.108.0",
+    "packagedVersion": "5.108.0",
+    "hash": "sha256:b675f1f13d926c7d719334626ad097693955dfb31053c5d17348c8861a674c26",
+    "packagedHash": "sha256:b675f1f13d926c7d719334626ad097693955dfb31053c5d17348c8861a674c26",
+    "drift": false
+  },
+  "qgDrift": false,
+  "harness": null,
+  "steps": [
+    {
+      "id": "deps",
+      "status": "not_applicable",
+      "required": false,
+      "detail": "sem package.json"
+    },
+    {
+      "id": "lint",
+      "status": "not_applicable",
+      "required": false,
+      "detail": "sem script lint"
+    },
+    {
+      "id": "typecheck",
+      "status": "not_applicable",
+      "required": false,
+      "detail": "sem script typecheck"
+    },
+    {
+      "id": "test",
+      "status": "not_applicable",
+      "required": false,
+      "detail": "sem suíte de testes"
+    },
+    {
+      "id": "build",
+      "status": "not_applicable",
+      "required": false,
+      "detail": "sem script build"
+    },
+    {
+      "id": "qg-l1",
+      "status": "timed_out",
+      "required": true,
+      "command": "python C:\\Users\\Lenovo\\.gstack\\hooks\\qg.py --path . --level 1",
+      "detail": "timeout: python C:\\Users\\Lenovo\\.gstack\\hooks\\qg.py --path . --level 1",
+      "durationMs": 186820
+    },
+    {
+      "id": "qg-l2",
+      "status": "timed_out",
+      "required": true,
+      "command": "python C:\\Users\\Lenovo\\.gstack\\hooks\\qg.py --path . --level 2",
+      "detail": "timeout: python C:\\Users\\Lenovo\\.gstack\\hooks\\qg.py --path . --level 2",
+      "durationMs": 202972
+    },
+    {
+      "id": "runtime:start",
+      "status": "pending_feature",
+      "productCritical": false,
+      "detail": "sem .gstack/runtime.json — `gstack_vibehard create` declara o runtime"
+    },
+    {
+      "id": "preview:open",
+      "status": "pending_feature",
+      "productCritical": false
+    }
+  ],
+  "failed": [],
+  "timedOut": [
+    "qg-l1",
+    "qg-l2"
+  ],
+  "toolMissing": [],
+  "releaseBaseline": {
+    "schemaVersion": "gstack.release-baseline.v1",
+    "releaseReady": false,
+    "programComplete": false,
+    "operationallyProven": false,
+    "fullyValidated": false,
+    "flakeRate": 1,
+    "residuals": [],
+    "nonGoals": [],
+    "provenance": {
+      "commit": "bd2b3a1bfbc0cbb57286c222fdb1cb4d5ae634c4",
+      "generatedAt": "2026-08-27",
+      "flakeRuns": 0,
+      "flakeFailures": 0
+    },
+    "advisory": true,
+    "completeVerdict": {
+      "ok": false,
+      "reason": "não pode renderizar 'concluído': falta programComplete, operationallyProven, fullyValidated"
+    }
+  }
+}

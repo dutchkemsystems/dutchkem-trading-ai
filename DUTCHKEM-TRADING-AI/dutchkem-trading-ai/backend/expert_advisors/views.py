@@ -19,9 +19,11 @@ class ExpertAdvisorListView(generics.ListAPIView):
         return ExpertAdvisor.objects.filter(user=self.request.user)
 
 
-class ExpertAdvisorDetailView(generics.RetrieveAPIView):
-    queryset = ExpertAdvisor.objects.all()
+class ExpertAdvisorDetailView(generics.RetrieveDestroyAPIView):
     serializer_class = ExpertAdvisorSerializer
+
+    def get_queryset(self):
+        return ExpertAdvisor.objects.filter(user=self.request.user)
 
 
 class ExpertAdvisorCreateView(APIView):

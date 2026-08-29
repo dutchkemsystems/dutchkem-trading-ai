@@ -71,7 +71,7 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
         run: |
           cd backend
-          pytest tests.py --tb=short -q
+          pytest . --tb=short -q
           pytest indicators/tests.py --tb=short -q
           pytest signals/tests.py --tb=short -q
           pytest risk_management/tests.py --tb=short -q

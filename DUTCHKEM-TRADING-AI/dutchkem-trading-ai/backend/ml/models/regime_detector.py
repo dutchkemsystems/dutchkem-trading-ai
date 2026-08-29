@@ -185,7 +185,7 @@ class RegimeDetector:
                     "regime": regime,
                     "confidence": float(confidence[i]),
                     "is_confident": float(confidence[i]) >= self.confidence_threshold,
-                    "regime_weight": self.REGIMES_WEIGHTS.get(regime, 0.5),
+                    "regime_weight": self.REGIME_WEIGHTS.get(regime, 0.5),
                 })
             return results
 

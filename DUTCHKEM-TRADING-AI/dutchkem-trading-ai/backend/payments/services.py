@@ -178,6 +178,7 @@ class PaymentService:
         logger.info("Withdrawal created: tx=%s amount=%s user=%s", tx.id, amount, user.username)
         return tx
 
+    @transaction.atomic
     def handle_webhook(self, event_data: dict) -> dict:
         event_type = event_data.get("event_type", "")
         reference = event_data.get("reference", "")
@@ -185,7 +186,7 @@ class PaymentService:
         if not reference:
             return {"status": "error", "message": "Missing reference"}
 
-        tx = Transaction.objects.filter(korapay_ref=reference).first()
+        tx = Transaction.objects.select_for_update().get(korapay_ref=reference)
         if not tx:
             logger.warning("Webhook for unknown reference: %s", reference)
             return {"status": "error", "message": "Transaction not found"}

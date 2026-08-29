@@ -33,6 +33,11 @@ INSTALLED_APPS = [
     "market_data",
     "notifications",
     "analytics",
+    "ml",
+    "referrals",
+    "backtesting",
+    "gold_edge",
+    "audit",
 ]
 
 # Use SQLite for testing

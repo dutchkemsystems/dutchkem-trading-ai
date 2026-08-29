@@ -34,7 +34,9 @@ class TradeListView(generics.ListAPIView):
     serializer_class = TradeSerializer
 
     def get_queryset(self):
-        queryset = Trade.objects.filter(user=self.request.user)
+        queryset = Trade.objects.filter(user=self.request.user).select_related(
+            "symbol", "timeframe", "signal", "expert_advisor"
+        )
         status_filter = self.request.query_params.get("status")
         symbol_filter = self.request.query_params.get("symbol")
 
@@ -47,7 +49,7 @@ class TradeListView(generics.ListAPIView):
 
 
 class TradeDetailView(generics.RetrieveAPIView):
-    queryset = Trade.objects.all()
+    queryset = Trade.objects.select_related("symbol", "timeframe", "signal", "expert_advisor").all()
     serializer_class = TradeSerializer
 
 
@@ -137,7 +139,7 @@ class OrderListView(generics.ListAPIView):
     serializer_class = OrderSerializer
 
     def get_queryset(self):
-        return Order.objects.filter(user=self.request.user)
+        return Order.objects.filter(user=self.request.user).select_related("symbol", "timeframe", "signal")
 
 
 class OrderCreateView(APIView):
@@ -243,14 +245,14 @@ class PositionListView(generics.ListAPIView):
     serializer_class = PositionSerializer
 
     def get_queryset(self):
-        return Position.objects.filter(user=self.request.user)
+        return Position.objects.filter(user=self.request.user).select_related("symbol", "trade", "timeframe")
 
 
 class PortfolioSummaryView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        positions = Position.objects.filter(user=request.user)
+        positions = Position.objects.filter(user=request.user).select_related("symbol", "trade", "timeframe")
 
         total_unrealized_pnl = positions.aggregate(total=Sum("unrealized_pnl"))["total"] or 0
         total_margin_used = positions.aggregate(total=Sum("margin_used"))["total"] or 0
@@ -274,7 +276,9 @@ class TradeHistoryView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        trades = Trade.objects.filter(user=request.user, status="CLOSED").order_by("-closed_at")[:100]
+        trades = Trade.objects.filter(user=request.user, status="CLOSED").select_related(
+            "symbol", "signal", "expert_advisor", "timeframe"
+        ).order_by("-closed_at")[:100]
 
         total_profit = trades.aggregate(total=Sum("profit_loss"))["total"] or 0
 

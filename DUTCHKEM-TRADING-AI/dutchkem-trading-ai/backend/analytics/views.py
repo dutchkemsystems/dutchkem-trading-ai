@@ -3,6 +3,8 @@
 from datetime import timedelta
 from decimal import Decimal
 
+from django.db.models import Count, Sum
+from django.db.models.functions import TruncDay
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
@@ -27,10 +29,10 @@ class TradingPerformanceView(APIView):
         month_ago = today - timedelta(days=30)
 
         # Get trades for each period
-        all_trades = Trade.objects.filter(user=user, status="CLOSED")
-        today_trades = all_trades.filter(close_time__date=today)
-        week_trades = all_trades.filter(close_time__date__gte=week_ago)
-        month_trades = all_trades.filter(close_time__date__gte=month_ago)
+        all_trades = Trade.objects.filter(user=user, status="CLOSED").select_related("symbol", "signal", "expert_advisor")
+        today_trades = all_trades.filter(closed_at__date=today)
+        week_trades = all_trades.filter(closed_at__date__gte=week_ago)
+        month_trades = all_trades.filter(closed_at__date__gte=month_ago)
 
         def calculate_metrics(trades):
             if not trades.exists():
@@ -47,12 +49,12 @@ class TradingPerformanceView(APIView):
                     "sharpe_ratio": 0,
                 }
 
-            wins = trades.filter(pnl__gt=0)
-            losses = trades.filter(pnl__lt=0)
+            wins = trades.filter(profit_loss__gt=0)
+            losses = trades.filter(profit_loss__lt=0)
 
-            total_pnl = sum(t.pnl or 0 for t in trades)
-            win_pnl = sum(t.pnl or 0 for t in wins)
-            loss_pnl = abs(sum(t.pnl or 0 for t in losses))
+            total_pnl = sum(t.profit_loss or 0 for t in trades)
+            win_pnl = sum(t.profit_loss or 0 for t in wins)
+            loss_pnl = abs(sum(t.profit_loss or 0 for t in losses))
 
             return {
                 "total_trades": trades.count(),
@@ -61,8 +63,8 @@ class TradingPerformanceView(APIView):
                 "win_rate": round(wins.count() / trades.count() * 100, 2) if trades.count() > 0 else 0,
                 "total_pnl": round(float(total_pnl), 2),
                 "average_pnl": round(float(total_pnl / trades.count()), 2) if trades.count() > 0 else 0,
-                "best_trade": round(float(max((t.pnl or 0) for t in trades)), 2),
-                "worst_trade": round(float(min((t.pnl or 0) for t in trades)), 2),
+                "best_trade": round(float(max((t.profit_loss or 0) for t in trades)), 2),
+                "worst_trade": round(float(min((t.profit_loss or 0) for t in trades)), 2),
                 "profit_factor": round(win_pnl / loss_pnl, 2) if loss_pnl > 0 else 0,
             }
 
@@ -72,30 +74,36 @@ class TradingPerformanceView(APIView):
             symbol = trade.symbol.name
             if symbol not in symbol_pnl:
                 symbol_pnl[symbol] = {"pnl": 0, "trades": 0, "wins": 0}
-            symbol_pnl[symbol]["pnl"] += float(trade.pnl or 0)
+            symbol_pnl[symbol]["pnl"] += float(trade.profit_loss or 0)
             symbol_pnl[symbol]["trades"] += 1
-            if trade.pnl and trade.pnl > 0:
+            if trade.profit_loss and trade.profit_loss > 0:
                 symbol_pnl[symbol]["wins"] += 1
 
         # PnL by timeframe
         tf_pnl = {}
         for trade in all_trades:
-            tf = trade.timeframe or "UNKNOWN"
+            tf = trade.timeframe.code if trade.timeframe else "UNKNOWN"
             if tf not in tf_pnl:
                 tf_pnl[tf] = {"pnl": 0, "trades": 0, "wins": 0}
-            tf_pnl[tf]["pnl"] += float(trade.pnl or 0)
+            tf_pnl[tf]["pnl"] += float(trade.profit_loss or 0)
             tf_pnl[tf]["trades"] += 1
-            if trade.pnl and trade.pnl > 0:
+            if trade.profit_loss and trade.profit_loss > 0:
                 tf_pnl[tf]["wins"] += 1
 
         # Daily PnL for chart
-        daily_pnl = []
-        for i in range(30):
-            date = today - timedelta(days=i)
-            day_trades = all_trades.filter(close_time__date=date)
-            day_pnl = sum(float(t.pnl or 0) for t in day_trades)
-            daily_pnl.append({"date": date.isoformat(), "pnl": round(day_pnl, 2)})
-        daily_pnl.reverse()
+        daily_pnl_data = all_trades.filter(
+            closed_at__gte=month_ago
+        ).annotate(
+            day=TruncDay('closed_at')
+        ).values('day').annotate(
+            total_pnl=Sum('profit_loss'),
+            trade_count=Count('id')
+        ).order_by('day')
+
+        daily_pnl = [
+            {"date": entry["day"].isoformat(), "pnl": round(float(entry["total_pnl"] or 0), 2)}
+            for entry in daily_pnl_data
+        ]
 
         return Response(
             {
@@ -188,8 +196,8 @@ class SignalAnalyticsView(APIView):
         user = request.user
 
         # Get all signals
-        all_signals = Signal.objects.all()
-        active_signals = all_signals.filter(status="ACTIVE")
+        all_signals = Signal.objects.select_related("symbol", "timeframe").all()
+        active_signals = all_signals.filter(is_active=True)
         recent_signals = all_signals.order_by("-created_at")[:50]
 
         # Signal performance by timeframe
@@ -200,7 +208,7 @@ class SignalAnalyticsView(APIView):
                 avg_strength = sum(float(s.strength or 0) for s in tf_signals) / tf_signals.count()
                 tf_performance[tf] = {
                     "total": tf_signals.count(),
-                    "active": tf_signals.filter(status="ACTIVE").count(),
+                    "active": tf_signals.filter(is_active=True).count(),
                     "average_strength": round(avg_strength, 2),
                 }
 

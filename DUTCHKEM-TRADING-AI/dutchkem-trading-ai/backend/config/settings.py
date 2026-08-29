@@ -8,7 +8,9 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-change-this-in-production")
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY environment variable is required")
 
 DEBUG = os.getenv("DEBUG", "1").lower() in ("true", "1", "yes")
 
@@ -35,7 +37,7 @@ INSTALLED_APPS = [
     "django_otp",
     "django_otp.plugins.otp_totp",
     "django_otp.plugins.otp_static",
-    "ratelimit",
+    "django_ratelimit",
     # Local apps
     "accounts",
     "trading",
@@ -48,6 +50,11 @@ INSTALLED_APPS = [
     "market_data",
     "notifications",
     "analytics",
+    "referrals",
+    "backtesting",
+    "ml",
+    "gold_edge",
+    "audit",
 ]
 
 MIDDLEWARE = [
@@ -61,7 +68,8 @@ MIDDLEWARE = [
     "django_otp.middleware.OTPMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "ratelimit.middleware.RatelimitMiddleware",
+    "django_ratelimit.middleware.RatelimitMiddleware",
+    "config.monitoring.RequestTimingMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -110,7 +118,7 @@ else:
             "ENGINE": "django.db.backends.postgresql",
             "NAME": os.getenv("DB_NAME", "dutchkem_trading"),
             "USER": os.getenv("DB_USER", "dutchkem_admin"),
-            "PASSWORD": os.getenv("DB_PASSWORD", "dutchkem_secure_2024"),
+            "PASSWORD": os.getenv("DB_PASSWORD", ""),
             "HOST": os.getenv("DB_HOST", "localhost"),
             "PORT": os.getenv("DB_PORT", "5432"),
             "CONN_MAX_AGE": 600,
@@ -232,7 +240,23 @@ TRADING_CONFIG = {
 
 # Rate Limiting
 RATELIMIT_USE_CACHE = "default"
-RATELIMIT_FAIL_OPEN = True
+RATELIMIT_FAIL_OPEN = False
+
+# Cache
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": os.getenv("REDIS_URL", "redis://localhost:6379/1"),
+    },
+    "sessions": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": os.getenv("REDIS_URL", "redis://localhost:6379/2"),
+    },
+    "trading": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": os.getenv("REDIS_URL", "redis://localhost:6379/3"),
+    },
+}
 
 # Security Settings
 if not DEBUG:

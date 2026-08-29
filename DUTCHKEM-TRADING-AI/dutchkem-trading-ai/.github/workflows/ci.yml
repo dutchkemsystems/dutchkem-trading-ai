@@ -60,7 +60,7 @@ jobs:
       - run: cd backend && pytest --cov=. --cov-report=xml -v
       - uses: codecov/codecov-action@v4
         with:
-          files: backend/coverage.xml
+          files: coverage.xml
 
   frontend-lint:
     runs-on: ubuntu-latest

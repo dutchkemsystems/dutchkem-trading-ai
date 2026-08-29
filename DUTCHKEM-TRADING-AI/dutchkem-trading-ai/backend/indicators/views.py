@@ -99,9 +99,26 @@ class IndicatorCalculationView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        import logging
+        from config.tasks import calculate_indicators
+
+        logger = logging.getLogger("indicators")
+
         symbol_id = request.data.get("symbol")
         timeframe_code = request.data.get("timeframe")
 
-        # This would trigger Celery task to calculate indicators
-        # For now, return placeholder
-        return Response({"status": "calculation_queued", "symbol": symbol_id, "timeframe": timeframe_code})
+        if not symbol_id or not timeframe_code:
+            return Response(
+                {"error": "Both 'symbol' and 'timeframe' are required."},
+                status=400,
+            )
+
+        # Queue real Celery task to calculate indicators
+        task = calculate_indicators.delay(str(symbol_id), str(timeframe_code))
+
+        return Response({
+            "status": "calculation_queued",
+            "task_id": task.id,
+            "symbol": symbol_id,
+            "timeframe": timeframe_code,
+        })

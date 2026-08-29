@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework import generics, permissions, status
+from rest_framework import generics, permissions, serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -165,8 +165,77 @@ class MFADisableView(APIView):
         return Response({"error": "Invalid code"}, status=status.HTTP_400_BAD_REQUEST)
 
 
+class MFAEnrollView(APIView):
+    """Generate TOTP secret for MFA enrollment"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        import pyotp
+        import qrcode
+        import io
+        import base64
+
+        user = request.user
+        secret = pyotp.random_base32()
+
+        user.mfa_secret = secret
+        user.save(update_fields=["mfa_secret"])
+
+        totp = pyotp.TOTP(secret)
+        provisioning_uri = totp.provisioning_uri(
+            name=user.email,
+            issuer_name="Dutchkem Trading AI"
+        )
+
+        return Response({
+            "secret": secret,
+            "provisioning_uri": provisioning_uri,
+            "message": "Scan QR code with authenticator app, then verify with /mfa/verify/"
+        })
+
+
+class MFAVerifyView(APIView):
+    """Verify TOTP code and enable MFA"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        import pyotp
+
+        user = request.user
+        code = request.data.get("code")
+
+        if not code:
+            return Response(
+                {"error": "code is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not user.mfa_secret:
+            return Response(
+                {"error": "MFA not enrolled. Call /mfa/enroll/ first"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        totp = pyotp.TOTP(user.mfa_secret)
+        if totp.verify(code):
+            user.mfa_enabled = True
+            user.save(update_fields=["mfa_enabled"])
+            return Response({"status": "MFA enabled successfully"})
+        else:
+            return Response(
+                {"error": "Invalid code"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class UserSessionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserSession
+        fields = ["id", "ip_address", "user_agent", "created_at"]
+
+
 class SessionListView(generics.ListAPIView):
-    serializer_class = UserSerializer
+    serializer_class = UserSessionSerializer
 
     def get_queryset(self):
         return UserSession.objects.filter(user=self.request.user, is_active=True)

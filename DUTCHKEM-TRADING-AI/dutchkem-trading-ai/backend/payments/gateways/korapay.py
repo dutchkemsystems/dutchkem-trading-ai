@@ -106,8 +106,8 @@ class KorapayGateway:
     def verify_webhook_signature(self, payload_body: bytes, signature: str) -> bool:
         secret = self.webhook_secret or self.secret_key
         if not secret:
-            logger.warning("KORA_WEBHOOK_SECRET not set, skipping webhook verification")
-            return True
+            logger.warning("KORA_WEBHOOK_SECRET not set, rejecting webhook (no secret configured)")
+            return False
         expected = hmac.new(
             secret.encode(), payload_body, hashlib.sha256
         ).hexdigest()

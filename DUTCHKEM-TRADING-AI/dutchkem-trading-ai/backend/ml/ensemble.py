@@ -45,6 +45,16 @@ class EnsemblePredictor:
             self._regime_model = RegimeDetector()
             self._regime_model.load_model(regime_path)
 
+        if sr_path:
+            from ml.models.sr_model import SRLevelModel
+            self._sr_model = SRLevelModel()
+            self._sr_model.load_model(sr_path)
+
+        if volatility_path:
+            from ml.models.volatility_model import VolatilityModel
+            self._volatility_model = VolatilityModel()
+            self._volatility_model.load_model(volatility_path)
+
         if preprocessor_path:
             from ml.preprocessing import DataPreprocessor
             self._preprocessor = DataPreprocessor()
@@ -107,18 +117,28 @@ class EnsemblePredictor:
         should_trade = overall_confidence > 0.65
 
         sr_levels = None
-        if sr_features is not None and self._sr_model is not None:
+        if self._sr_model is not None:
             try:
-                sr_pred = self._sr_model.predict(sr_features)
+                if sr_features is not None:
+                    sr_pred = self._sr_model.predict(sr_features)
+                else:
+                    # Use current_features as fallback for SR prediction
+                    sr_pred = self._sr_model.predict(current_features)
                 sr_levels = sr_pred
+                predictions["sr_levels"] = sr_pred
             except Exception as e:
                 logger.error("S/R prediction error: %s", e)
 
         volatility_regime = None
-        if volatility_features is not None and self._volatility_model is not None:
+        if self._volatility_model is not None:
             try:
-                vol_pred = self._volatility_model.predict(volatility_features)
+                if volatility_features is not None:
+                    vol_pred = self._volatility_model.predict(volatility_features)
+                else:
+                    # Use current_features as fallback for volatility prediction
+                    vol_pred = self._volatility_model.predict(current_features)
                 volatility_regime = vol_pred
+                predictions["volatility"] = vol_pred
             except Exception as e:
                 logger.error("Volatility prediction error: %s", e)
 

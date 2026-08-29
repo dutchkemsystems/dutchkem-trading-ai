@@ -48,6 +48,7 @@ class OrderExecutionService:
         order_type: str = "MARKET",
     ) -> Tuple[bool, str, Dict[str, Any]]:
         from risk_management.models import DrawdownMonitor, RiskParameter
+        from trading.models import Position
 
         risk_params = RiskParameter.objects.filter(is_active=True).first()
         if not risk_params:
@@ -60,6 +61,9 @@ class OrderExecutionService:
             "daily_trades_ok": True,
             "position_size_ok": True,
             "daily_target_ok": True,
+            "portfolio_exposure_ok": True,
+            "correlation_ok": True,
+            "net_directional_ok": True,
         }
 
         if monitor:
@@ -95,6 +99,77 @@ class OrderExecutionService:
             checks["position_size_ok"] = False
             return False, "Position size exceeds risk limit", checks
 
+        # ── Portfolio-Level Risk Checks ──────────────────────────────
+        open_positions = Position.objects.filter(user=user, trade__status="OPEN")
+
+        # 1. Total portfolio exposure check
+        total_exposure = sum(
+            float(p.volume) * float(p.symbol.contract_size) * float(p.current_price or 0)
+            for p in open_positions
+        )
+        new_exposure = volume_f * 100000 * float(
+            symbol.current_price if hasattr(symbol, 'current_price') and symbol.current_price else 1.0
+        )
+        portfolio_exposure_pct = (total_exposure + new_exposure) / equity * 100 if equity > 0 else 0
+
+        if portfolio_exposure_pct > 50:  # Max 50% total exposure
+            checks["portfolio_exposure_ok"] = False
+            return False, f"Portfolio exposure too high: {portfolio_exposure_pct:.1f}% (max 50%)", checks
+
+        # 2. Correlation check between new position and existing positions
+        from risk_management.models import CorrelationMatrix
+        new_symbol_name = symbol.name if hasattr(symbol, 'name') else str(symbol)
+
+        for pos in open_positions:
+            existing_name = pos.symbol.name
+            if existing_name == new_symbol_name:
+                continue
+
+            # Normalize pair name alphabetically
+            pair_names = sorted([existing_name, new_symbol_name])
+            pair_key = f"{pair_names[0]}-{pair_names[1]}"
+
+            correlation_record = CorrelationMatrix.objects.filter(
+                symbol_pair=pair_key
+            ).order_by("-calculated_at").first()
+
+            if correlation_record:
+                corr = float(correlation_record.correlation)
+                if abs(corr) > float(risk_params.max_correlation):
+                    # Reduce position size proportionally
+                    reduction_factor = 1 - (abs(corr) - float(risk_params.max_correlation))
+                    volume_f *= max(0.25, reduction_factor)  # Min 25% of original
+                    checks["correlation_ok"] = False
+                    # Update volume in checks for caller to use reduced size
+                    checks["adjusted_volume"] = str(round(volume_f, 2))
+
+        # 3. Net directional exposure check
+        net_long_exposure = sum(
+            float(p.volume) * float(p.symbol.contract_size) * float(p.current_price or 0)
+            for p in open_positions if p.position_type == "BUY"
+        )
+        net_short_exposure = sum(
+            float(p.volume) * float(p.symbol.contract_size) * float(p.current_price or 0)
+            for p in open_positions if p.position_type == "SELL"
+        )
+
+        new_position_direction = "BUY" if position_type.upper() == "BUY" else "SELL"
+        if new_position_direction == "BUY":
+            net_long_exposure += new_exposure
+        else:
+            net_short_exposure += new_exposure
+
+        net_exposure = abs(net_long_exposure - net_short_exposure)
+        total_all = net_long_exposure + net_short_exposure
+        if total_all > 0:
+            net_exposure_pct = net_exposure / total_all * 100
+            if net_exposure_pct > 70:  # Max 70% one-directional
+                checks["net_directional_ok"] = False
+                return False, (
+                    f"Net directional exposure too high: {net_exposure_pct:.1f}% "
+                    f"(max 70%). Consider diversifying directions."
+                ), checks
+
         return True, "All checks passed", checks
 
     @transaction.atomic
@@ -118,6 +193,10 @@ class OrderExecutionService:
         if not valid:
             raise RiskCheckError(message)
 
+        # Apply correlation-adjusted volume if returned by risk checks
+        if "adjusted_volume" in checks:
+            volume = Decimal(checks["adjusted_volume"])
+
         sym = Symbol.objects.get(id=symbol) if isinstance(symbol, str) else symbol
 
         order = Order.objects.create(
@@ -134,21 +213,26 @@ class OrderExecutionService:
         )
 
         import asyncio
+        import concurrent.futures
 
-        loop = asyncio.new_event_loop()
+        _coro = self.mt5.open_position(
+            symbol=sym.name,
+            volume=float(volume),
+            position_type=position_type,
+            stop_loss=float(stop_loss) if stop_loss else 0.0,
+            take_profit=float(take_profit) if take_profit else 0.0,
+            magic=magic,
+        )
         try:
-            result = loop.run_until_complete(
-                self.mt5.open_position(
-                    symbol=sym.name,
-                    volume=float(volume),
-                    position_type=position_type,
-                    stop_loss=float(stop_loss) if stop_loss else 0.0,
-                    take_profit=float(take_profit) if take_profit else 0.0,
-                    magic=magic,
-                )
-            )
-        finally:
-            loop.close()
+            asyncio.get_running_loop()
+        except RuntimeError:
+            result = asyncio.run(_coro)
+        else:
+            # Already inside a running loop (e.g. async view) — run in a
+            # dedicated thread to avoid "cannot call asyncio.run() inside
+            # a running event loop" errors.
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                result = pool.submit(asyncio.run, _coro).result()
 
         if not result.get("success"):
             order.status = "REJECTED"
@@ -224,14 +308,16 @@ class OrderExecutionService:
         close_volume = partial_volume if partial_volume else trade.volume
 
         import asyncio
+        import concurrent.futures
 
-        loop = asyncio.new_event_loop()
+        _coro = self.mt5.close_position(int(trade.mt5_ticket))
         try:
-            result = loop.run_until_complete(
-                self.mt5.close_position(int(trade.mt5_ticket))
-            )
-        finally:
-            loop.close()
+            asyncio.get_running_loop()
+        except RuntimeError:
+            result = asyncio.run(_coro)
+        else:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                result = pool.submit(asyncio.run, _coro).result()
 
         if not result.get("success"):
             raise OrderExecutionError(
@@ -289,18 +375,20 @@ class OrderExecutionService:
             raise OrderExecutionError("Trade not found or not open")
 
         import asyncio
+        import concurrent.futures
 
-        loop = asyncio.new_event_loop()
+        _coro = self.mt5.modify_position(
+            int(trade.mt5_ticket),
+            float(stop_loss) if stop_loss else 0.0,
+            float(take_profit) if take_profit else 0.0,
+        )
         try:
-            result = loop.run_until_complete(
-                self.mt5.modify_position(
-                    int(trade.mt5_ticket),
-                    float(stop_loss) if stop_loss else 0.0,
-                    float(take_profit) if take_profit else 0.0,
-                )
-            )
-        finally:
-            loop.close()
+            asyncio.get_running_loop()
+        except RuntimeError:
+            result = asyncio.run(_coro)
+        else:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                result = pool.submit(asyncio.run, _coro).result()
 
         if not result.get("success"):
             raise OrderExecutionError(

@@ -175,6 +175,19 @@ export const analyticsAPI = {
   getSignalAnalytics: () => api.get('/analytics/signals/'),
 };
 
+export const backtestingAPI = {
+  getBacktests: () => api.get('/backtesting/'),
+  getBacktest: (id) => api.get(`/backtesting/${id}/`),
+  runBacktest: (data) => api.post('/backtesting/run/', data),
+};
+
+export const referralsAPI = {
+  getReferrals: () => api.get('/referrals/'),
+  createReferral: () => api.post('/referrals/create/'),
+  applyReferral: (code) => api.post('/referrals/apply/', { code }),
+  getStats: () => api.get('/referrals/stats/'),
+};
+
 export const notificationsAPI = {
   getNotifications: (params) => api.get('/notifications/', { params }),
   markAsRead: (id) => api.post(`/notifications/${id}/read/`),
