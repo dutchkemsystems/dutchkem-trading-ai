@@ -6,10 +6,21 @@ import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Security Settings
 SECRET_KEY = os.environ.get("SECRET_KEY")
 DEBUG = False
 
+# Fly.io specific: Parse ALLOWED_HOSTS from comma-separated string
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",")
+# Add Fly.io internal hostnames
+FLY_APP_NAME = os.environ.get("FLY_APP_NAME", "")
+if FLY_APP_NAME:
+    ALLOWED_HOSTS.extend([
+        f"{FLY_APP_NAME}.fly.dev",
+        f"{FLY_APP_NAME}.internal",
+        ".fly.dev",
+        ".internal",
+    ])
 
 INSTALLED_APPS = [
     "daphne",
@@ -132,7 +143,15 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+
+# WhiteNoise configuration for Fly.io
+# Enables efficient static file serving with compression and caching
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+# WhiteNoise settings
+WHITENOISE_USE_FINDERS = True
+WHITENOISE_AUTOREFRESH = False  # Disable in production for better performance
+WHITENOISE_MAX_AGE = 31536000  # 1 year cache for static files
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
@@ -179,9 +198,21 @@ SIMPLE_JWT = {
 }
 
 CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
+# Add Fly.io frontend domain if app name is set
+if FLY_APP_NAME:
+    CORS_ALLOWED_ORIGINS.extend([
+        f"https://{FLY_APP_NAME}-frontend.fly.dev",
+        "http://localhost:3000",
+    ])
 CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
+# Add Fly.io frontend domain if app name is set
+if FLY_APP_NAME:
+    CSRF_TRUSTED_ORIGINS.extend([
+        f"https://{FLY_APP_NAME}-frontend.fly.dev",
+        "http://localhost:3000",
+    ])
 
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = "django-db"
@@ -206,6 +237,9 @@ MT5_WS_PORT = int(os.environ.get("MT5_WS_PORT", 3001))
 MT5_TIMEOUT = int(os.environ.get("MT5_TIMEOUT", 10))
 MT5_MAX_RETRIES = int(os.environ.get("MT5_MAX_RETRIES", 5))
 MT5_RETRY_DELAY = float(os.environ.get("MT5_RETRY_DELAY", 2.0))
+
+# MT5 MCP Bridge URL (Cloudflare Tunnel endpoint)
+MT5_MCP_URL = os.environ.get("MT5_MCP_URL", "http://localhost:8080")
 
 KORA_SECRET_KEY = os.environ.get("KORA_SECRET_KEY", "")
 KORA_ENCRYPTION_KEY = os.environ.get("KORA_ENCRYPTION_KEY", "")
@@ -249,12 +283,21 @@ LOGGING = {
             "format": "{levelname} {message}",
             "style": "{",
         },
+        "json": {
+            "()": "pythonjsonlogger.json.JsonFormatter",
+            "format": "%(levelname)s %(asctime)s %(module)s %(message)s",
+        },
     },
     "handlers": {
         "console": {
             "level": "INFO",
             "class": "logging.StreamHandler",
             "formatter": "simple",
+        },
+        "json_console": {
+            "level": "INFO",
+            "class": "logging.StreamHandler",
+            "formatter": "json",
         },
     },
     "loggers": {
@@ -283,5 +326,15 @@ LOGGING = {
             "level": "WARNING",
             "propagate": False,
         },
+        # Fly.io specific: Use JSON logging for production
+        "flyio": {
+            "handlers": ["json_console"],
+            "level": "INFO",
+            "propagate": False,
+        },
     },
 }
+
+# Fly.io Health Check Configuration
+HEALTH_CHECK_ENABLED = True
+HEALTH_CHECK_TIMEOUT = 10
