@@ -10,9 +10,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("SECRET_KEY")
 DEBUG = False
 
-# Fly.io specific: Parse ALLOWED_HOSTS from comma-separated string
+# Render / generic: Parse ALLOWED_HOSTS from comma-separated string
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",")
-# Add Fly.io internal hostnames
+# Add Render default hostname if not explicitly set
+RENDER_EXTERNAL_HOSTNAME = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "")
+if RENDER_EXTERNAL_HOSTNAME and RENDER_EXTERNAL_HOSTNAME not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+# Support legacy Fly.io env if still present
 FLY_APP_NAME = os.environ.get("FLY_APP_NAME", "")
 if FLY_APP_NAME:
     ALLOWED_HOSTS.extend([
@@ -21,6 +25,10 @@ if FLY_APP_NAME:
         ".fly.dev",
         ".internal",
     ])
+# Railway: Add Railway domain if RAILWAY_PUBLIC_DOMAIN is set
+RAILWAY_PUBLIC_DOMAIN = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
+if RAILWAY_PUBLIC_DOMAIN and RAILWAY_PUBLIC_DOMAIN not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(RAILWAY_PUBLIC_DOMAIN)
 
 INSTALLED_APPS = [
     "daphne",
@@ -95,16 +103,24 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+REDIS_URL = os.environ.get("REDIS_URL", "")
 
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [REDIS_URL],
+# Only use Redis channel layer if Redis is available
+if REDIS_URL:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [REDIS_URL],
+            },
         },
-    },
-}
+    }
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        },
+    }
 
 DATABASES = {
     "default": dj_database_url.config(
@@ -114,17 +130,25 @@ DATABASES = {
     )
 }
 
-CACHES = {
-    "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": REDIS_URL,
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-        },
-        "KEY_PREFIX": "dutchkem",
-        "TIMEOUT": 300,
+# Use Redis cache if available, otherwise fall back to local memory
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            },
+            "KEY_PREFIX": "dutchkem",
+            "TIMEOUT": 300,
+        }
     }
-}
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        }
+    }
 
 AUTH_USER_MODEL = "accounts.User"
 
@@ -144,7 +168,7 @@ STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 
-# WhiteNoise configuration for Fly.io
+# WhiteNoise configuration for cloud deployment (Render / Fly.io)
 # Enables efficient static file serving with compression and caching
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
@@ -198,7 +222,12 @@ SIMPLE_JWT = {
 }
 
 CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
-# Add Fly.io frontend domain if app name is set
+# Add Render frontend domain if hostname is set
+if RENDER_EXTERNAL_HOSTNAME:
+    backend_url = f"https://{RENDER_EXTERNAL_HOSTNAME}"
+    if backend_url not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS.append(backend_url)
+# Add Fly.io frontend domain if app name is set (legacy support)
 if FLY_APP_NAME:
     CORS_ALLOWED_ORIGINS.extend([
         f"https://{FLY_APP_NAME}-frontend.fly.dev",
@@ -207,15 +236,26 @@ if FLY_APP_NAME:
 CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
-# Add Fly.io frontend domain if app name is set
+# Add Render frontend domain if hostname is set
+if RENDER_EXTERNAL_HOSTNAME:
+    backend_url = f"https://{RENDER_EXTERNAL_HOSTNAME}"
+    if backend_url not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(backend_url)
+# Add Fly.io frontend domain if app name is set (legacy support)
 if FLY_APP_NAME:
     CSRF_TRUSTED_ORIGINS.extend([
         f"https://{FLY_APP_NAME}-frontend.fly.dev",
         "http://localhost:3000",
     ])
 
-CELERY_BROKER_URL = REDIS_URL
-CELERY_RESULT_BACKEND = "django-db"
+# Celery: Use Redis if available, otherwise disable
+if REDIS_URL:
+    CELERY_BROKER_URL = REDIS_URL
+    CELERY_RESULT_BACKEND = "django-db"
+else:
+    CELERY_BROKER_URL = None
+    CELERY_RESULT_BACKEND = None
+    CELERY_TASK_ALWAYS_EAGER = True  # Run tasks synchronously without broker
 CELERY_CACHE_BACKEND = "django-cache"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
@@ -326,8 +366,8 @@ LOGGING = {
             "level": "WARNING",
             "propagate": False,
         },
-        # Fly.io specific: Use JSON logging for production
-        "flyio": {
+        # Render / Production: Use JSON logging for cloud environments
+        "cloud": {
             "handlers": ["json_console"],
             "level": "INFO",
             "propagate": False,
@@ -335,6 +375,6 @@ LOGGING = {
     },
 }
 
-# Fly.io Health Check Configuration
+# Cloud Health Check Configuration (Render / Fly.io)
 HEALTH_CHECK_ENABLED = True
 HEALTH_CHECK_TIMEOUT = 10
