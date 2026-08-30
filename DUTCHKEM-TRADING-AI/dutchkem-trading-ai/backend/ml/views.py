@@ -60,3 +60,44 @@ class TrainView(APIView):
                 "model_type": model_type,
             }
         )
+
+
+class V6OrchestratorStatusView(APIView):
+    """
+    GET /api/v1/ml/v6/status/
+    Returns the current status of the V6 Trading Orchestrator,
+    including which components are loaded and available.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from ml.v6_orchestrator import get_v6_orchestrator
+
+        orchestrator = get_v6_orchestrator()
+        status_data = orchestrator.get_status()
+
+        return Response({
+            "v6_status": status_data,
+            "message": "V6 Trading Orchestrator status",
+        })
+
+
+class V6CycleView(APIView):
+    """
+    POST /api/v1/ml/v6/cycle/
+    Manually trigger a V6 trading cycle (admin only).
+    Typically runs automatically via Celery every 60s.
+    """
+
+    permission_classes = [permissions.IsAdminUser]
+
+    def post(self, request):
+        from config.tasks import run_v6_trading_cycle
+
+        task = run_v6_trading_cycle.delay()
+        return Response({
+            "status": "cycle_triggered",
+            "task_id": task.id,
+            "message": "V6 trading cycle queued",
+        })

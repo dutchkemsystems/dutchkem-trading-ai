@@ -208,7 +208,7 @@ def deploy_ea(self, ea_id: str):
     """
     try:
         from eas.mql5_generator import mql5_generator
-        from mcp_servers.mcp_service import mcp_service
+        from mcp_integration.services import mt5_service as mcp_service
 
         from expert_advisors.models import EADeployment, ExpertAdvisor
 
@@ -1008,3 +1008,100 @@ def run_gold_edge_backtest(self, backtest_id: str):
     )
 
     return {"status": "success", "backtest_id": backtest_id}
+
+
+# ── V6 Complete Trading Cycle ──────────────────────────────────────
+@shared_task(bind=True, max_retries=3)
+def run_v6_trading_cycle(self):
+    """
+    V6 Complete Trading Cycle - runs every 60 seconds.
+    Scans markets, generates signals, manages risk, executes trades.
+
+    Pipeline: Scan -> AI -> Signal -> Risk -> Execute -> Learn
+    """
+    try:
+        import asyncio
+        from ml.v6_orchestrator import get_v6_orchestrator
+
+        orchestrator = get_v6_orchestrator()
+        orchestrator.initialize()
+
+        # ── Fetch market data for all active symbols ────────────────
+        from mcp_integration.services import mt5_service
+
+        market_data = {}
+
+        symbols = [
+            "XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD",
+            "USDCAD", "NZDUSD", "USDCHF", "EURGBP", "EURJPY",
+        ]
+
+        loop = asyncio.new_event_loop()
+        try:
+            for symbol in symbols:
+                try:
+                    candles = loop.run_until_complete(
+                        mt5_service.get_candles(symbol, "M5", 100)
+                    )
+                    if candles and isinstance(candles, list) and len(candles) >= 10:
+                        closes = [float(c.get("close", 0)) for c in candles]
+                        highs = [float(c.get("high", 0)) for c in candles]
+                        lows = [float(c.get("low", 0)) for c in candles]
+
+                        # Compute ATR for volatility scaling
+                        trs = []
+                        for i in range(1, len(candles)):
+                            h, l, pc = highs[i], lows[i], closes[i - 1]
+                            trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+                        current_atr = sum(trs[-14:]) / 14.0 if len(trs) >= 14 else 0
+                        historical_atr = sum(trs) / len(trs) if trs else 1
+
+                        # Get tick data for spread
+                        try:
+                            tick = loop.run_until_complete(
+                                mt5_service.get_tick_data(symbol)
+                            )
+                            spread = tick.get("spread", 0.1) if tick else 0.1
+                        except Exception:
+                            spread = 0.1
+
+                        market_data[symbol] = {
+                            "candles": candles,
+                            "current_price": closes[-1] if closes else 0,
+                            "spread": spread,
+                            "volume": sum(
+                                int(c.get("volume", 0)) for c in candles[-20:]
+                            ),
+                            "current_atr": current_atr,
+                            "historical_atr": historical_atr,
+                            "highs": highs,
+                            "lows": lows,
+                            "closes": closes,
+                        }
+                except Exception as sym_exc:
+                    logger.warning(
+                        "V6 market data fetch failed for %s: %s", symbol, sym_exc
+                    )
+                    continue
+        finally:
+            loop.close()
+
+        if not market_data:
+            logger.warning("V6 cycle: No market data available")
+            return {"status": "NO_DATA"}
+
+        # ── Run the V6 trading cycle ────────────────────────────────
+        result = orchestrator.run_trading_cycle(market_data)
+
+        logger.info(
+            "V6 cycle complete: status=%s, trade_executed=%s, components=%d/%d",
+            result.get("status"),
+            result.get("trade_executed"),
+            result.get("phases", {}).get("scan", {}).get("filtered_count", 0),
+            len(market_data),
+        )
+        return result
+
+    except Exception as e:
+        logger.error("V6 trading cycle failed: %s", e, exc_info=True)
+        raise self.retry(exc=e, countdown=60)
