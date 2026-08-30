@@ -126,6 +126,12 @@ urlpatterns = [
         path("api/v1/ml/", include("ml.urls")),
         path("api/v1/backtesting/", include("backtesting.urls")),
     path("api/v1/gold-edge/", include("gold_edge.urls")),
+    # V2: Scalping
+    path("api/v1/scalping/", include("scalping.urls")),
+    # V4: Infrastructure
+    path("api/v1/infrastructure/", include("infrastructure.urls")),
+    # V5: Security
+    path("api/v1/security/", include("security.urls")),
     path("swagger/", schema_view.with_ui("swagger", cache_timeout=0), name="schema-swagger-ui"),
     path("redoc/", schema_view.with_ui("redoc", cache_timeout=0), name="schema-redoc"),
 ]

@@ -49,6 +49,11 @@ yfinance==0.2.40
 scikit-learn==1.5.1
 xgboost==2.1.1
 tensorflow>=2.15.0
+torch>=2.0.0
+
+# V6: Advanced ML
+river>=0.21.0
+deap>=1.4.0
 
 # Monitoring
 django-prometheus==2.3.3

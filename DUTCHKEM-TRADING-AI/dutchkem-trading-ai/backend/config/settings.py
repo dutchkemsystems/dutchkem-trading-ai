@@ -55,12 +55,22 @@ INSTALLED_APPS = [
     "ml",
     "gold_edge",
     "audit",
+    # V2: Scalping Engine
+    "scalping",
+    # V4: Infrastructure
+    "infrastructure",
+    # V5: Security Layer
+    "security",
 ]
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    # V5: WAF Middleware (before CommonMiddleware to catch bad requests early)
+    "security.waf.WAFMiddleware",
+    # V5: Zero Trust Middleware (after auth to verify JWT claims)
+    "security.zero_trust.ZeroTrustMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -312,5 +322,99 @@ LOGGING = {
             "handlers": ["console", "file"],
             "propagate": True,
         },
+        "security": {
+            "handlers": ["console", "file"],
+            "propagate": True,
+        },
+        "ml": {
+            "handlers": ["console", "file"],
+            "propagate": True,
+        },
+        "infrastructure": {
+            "handlers": ["console", "file"],
+            "propagate": True,
+        },
+        "scalping": {
+            "handlers": ["console", "file"],
+            "propagate": True,
+        },
     },
 }
+
+# ============================================================================
+# V5: Military-Grade Security Settings
+# ============================================================================
+
+# Zero Trust
+ZERO_TRUST_ENABLED = os.getenv("ZERO_TRUST_ENABLED", "1").lower() in ("true", "1", "yes")
+ZERO_TRUST_THRESHOLD = int(os.getenv("ZERO_TRUST_THRESHOLD", "60"))
+ZERO_TRUST_JWT_SECRET = os.getenv("ZERO_TRUST_JWT_SECRET", SECRET_KEY)
+
+# WAF
+WAF_ENABLED = os.getenv("WAF_ENABLED", "1").lower() in ("true", "1", "yes")
+WAF_RATE_LIMIT = int(os.getenv("WAF_RATE_LIMIT", "100"))  # requests per minute per IP
+WAF_BLOCK_DURATION = int(os.getenv("WAF_BLOCK_DURATION", "3600"))  # seconds
+WAF_MAX_BODY_SIZE = int(os.getenv("WAF_MAX_BODY_SIZE", str(10 * 1024 * 1024)))  # 10MB
+
+# IDS/IPS
+IDS_ENABLED = os.getenv("IDS_ENABLED", "1").lower() in ("true", "1", "yes")
+IDS_BRUTE_FORCE_THRESHOLD = int(os.getenv("IDS_BRUTE_FORCE_THRESHOLD", "5"))
+IDS_BRUTE_FORCE_WINDOW = int(os.getenv("IDS_BRUTE_FORCE_WINDOW", "300"))  # seconds
+
+# SIEM
+SIEM_ENABLED = os.getenv("SIEM_ENABLED", "1").lower() in ("true", "1", "yes")
+SIEM_CORRELATION_WINDOW = int(os.getenv("SIEM_CORRELATION_WINDOW", "300"))  # seconds
+
+# RASP
+RASP_ENABLED = os.getenv("RASP_ENABLED", "1").lower() in ("true", "1", "yes")
+RASP_INTEGRITY_CHECK_INTERVAL = int(os.getenv("RASP_INTEGRITY_CHECK_INTERVAL", "3600"))
+
+# Encryption
+ENCRYPTION_KEY_VERSION = int(os.getenv("ENCRYPTION_KEY_VERSION", "1"))
+ENCRYPTION_ALGORITHM = os.getenv("ENCRYPTION_ALGORITHM", "AES-256-GCM")
+
+# Credential Manager
+CREDENTIAL_VAULT_ENABLED = os.getenv("CREDENTIAL_VAULT_ENABLED", "1").lower() in ("true", "1", "yes")
+
+# ============================================================================
+# V6: Advanced Enhancement Settings
+# ============================================================================
+
+# Meta-Learning
+META_LEARNING_ENABLED = os.getenv("META_LEARNING_ENABLED", "1").lower() in ("true", "1", "yes")
+META_LEARNING_ADAPTATION_THRESHOLD = float(os.getenv("META_LEARNING_ADAPTATION_THRESHOLD", "0.95"))
+
+# Asset Ensemble
+ASSET_ENSEMBLE_ENABLED = os.getenv("ASSET_ENSEMBLE_ENABLED", "1").lower() in ("true", "1", "yes")
+
+# Transfer Learning
+TRANSFER_LEARNING_ENABLED = os.getenv("TRANSFER_LEARNING_ENABLED", "1").lower() in ("true", "1", "yes")
+
+# Dynamic Allocation
+DYNAMIC_ALLOCATION_ENABLED = os.getenv("DYNAMIC_ALLOCATION_ENABLED", "1").lower() in ("true", "1", "yes")
+DYNAMIC_ALLOCATION_MIN_WEIGHT = float(os.getenv("DYNAMIC_ALLOCATION_MIN_WEIGHT", "0.01"))
+DYNAMIC_ALLOCATION_MAX_WEIGHT = float(os.getenv("DYNAMIC_ALLOCATION_MAX_WEIGHT", "0.25"))
+
+# Correlation Manager
+CORRELATION_THRESHOLD = float(os.getenv("CORRELATION_THRESHOLD", "0.70"))
+CORRELATION_LOOKBACK = int(os.getenv("CORRELATION_LOOKBACK", "50"))
+
+# Time-Based Exit
+TIME_EXIT_SCALP_MINUTES = int(os.getenv("TIME_EXIT_SCALP_MINUTES", "30"))
+TIME_EXIT_SWING_MINUTES = int(os.getenv("TIME_EXIT_SWING_MINUTES", "180"))
+TIME_EXIT_TREND_MINUTES = int(os.getenv("TIME_EXIT_TREND_MINUTES", "720"))
+
+# Execution Optimizer
+MAX_SLIPPAGE_PIPS = float(os.getenv("MAX_SLIPPAGE_PIPS", "0.5"))
+MAX_SPREAD_PIPS = float(os.getenv("MAX_SPREAD_PIPS", "0.5"))
+
+# Scalping Scanner
+SCANNER_MAX_WORKERS = int(os.getenv("SCANNER_MAX_WORKERS", "8"))
+
+# Strategy Diversification
+STRATEGY_DIVERSIFICATION_ENABLED = os.getenv("STRATEGY_DIVERSIFICATION_ENABLED", "1").lower() in ("true", "1", "yes")
+
+# Infrastructure
+MULTI_NODE_ENABLED = os.getenv("MULTI_NODE_ENABLED", "0").lower() in ("true", "1", "yes")
+SELF_HEALING_ENABLED = os.getenv("SELF_HEALING_ENABLED", "1").lower() in ("true", "1", "yes")
+MT5_POOL_MAX_CONNECTIONS = int(os.getenv("MT5_POOL_MAX_CONNECTIONS", "5"))
