@@ -19,7 +19,7 @@ DATABASES = {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": "dutchkem_trading",
         "USER": os.environ.get("DB_USER", "dutchkem"),
-        "PASSWORD": os.environ.get("DB_PASSWORD", "supersecret"),
+        "PASSWORD": os.environ.get("DB_PASSWORD", ""),
         "HOST": os.environ.get("DB_HOST", "postgres"),
         "PORT": os.environ.get("DB_PORT", "5432"),
         "CONN_MAX_AGE": 600,
@@ -203,3 +203,4 @@ TRADING_CONFIG = {
     "MIN_RISK_REWARD_RATIO": 2.0,
     "TARGET_ANNUAL_GROWTH": 0.40,
 }
+

@@ -8,13 +8,16 @@ WORKDIR /app
 # Copy package files first for better layer caching
 COPY dutchkem-trading-ai/frontend/package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install ALL dependencies (including devDependencies needed for build)
+RUN npm ci
 
 # Copy source code
 COPY dutchkem-trading-ai/frontend/ .
 
-# Build the application
+# Build the application with production env vars
+ENV REACT_APP_API_URL=/api/v1
+ENV REACT_APP_WS_URL=wss://dutchkem-trading-ai-frontend.fly.dev/ws
+ENV CI=false
 RUN npm run build
 
 # ============================================

@@ -352,7 +352,7 @@ class TamperDetector:
             'django.contrib.messages.middleware.MessageMiddleware',
             'django.middleware.clickjacking.XFrameOptionsMiddleware',
             'django_ratelimit.middleware.RatelimitMiddleware',
-            'config.monitoring.RequestTimingMiddleware',
+            'config.middleware.RequestTimingMiddleware',
         ]
 
         actual = getattr(settings, 'MIDDLEWARE', [])

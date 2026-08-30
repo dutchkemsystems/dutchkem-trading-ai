@@ -50,7 +50,7 @@ INSTALLED_APPS = [
     "django_otp",
     "django_otp.plugins.otp_totp",
     "django_otp.plugins.otp_static",
-    "ratelimit",
+    "django_ratelimit",
     "accounts",
     "trading",
     "indicators",
@@ -66,12 +66,18 @@ INSTALLED_APPS = [
     "backtesting",
     "ml",
     "gold_edge",
+    "audit",
+    "scalping",
+    "infrastructure",
+    "security",
 ]
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "security.waf.WAFMiddleware",
+    "security.zero_trust.ZeroTrustMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -79,7 +85,7 @@ MIDDLEWARE = [
     "django_otp.middleware.OTPMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "ratelimit.middleware.RatelimitMiddleware",
+    "django_ratelimit.middleware.RatelimitMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -374,6 +380,26 @@ LOGGING = {
         "risk_management": {
             "handlers": ["console"],
             "level": "WARNING",
+            "propagate": False,
+        },
+        "infrastructure": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "infrastructure.failover": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "infrastructure.health_monitor": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "infrastructure.alert_system": {
+            "handlers": ["console"],
+            "level": "INFO",
             "propagate": False,
         },
         # Render / Production: Use JSON logging for cloud environments

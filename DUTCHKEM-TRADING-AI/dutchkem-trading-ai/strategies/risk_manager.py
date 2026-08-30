@@ -478,31 +478,6 @@ class DailyRiskManager:
         
         return round(position_size, 2)
     
-    @staticmethod
-    def kelly_criterion(
-        win_rate: float, avg_win: float, avg_loss: float, fraction: float = 0.35
-    ) -> float:
-        """
-        Kelly Criterion position sizing.
-
-        Returns the optimal fraction of equity to risk, scaled down by
-        *fraction* (default 0.35, i.e. fractional Kelly) for safety.
-
-        Args:
-            win_rate:   probability of a win (0.0 – 1.0)
-            avg_win:    average winning trade P&L (absolute value)
-            avg_loss:   average losing trade P&L (absolute value)
-            fraction:   fraction of full Kelly to use (0.0 – 1.0)
-        
-        Returns:
-            Fraction of equity to risk (0.0 if calculation yields negative).
-        """
-        if avg_loss <= 0 or win_rate <= 0:
-            return 0.0
-        b = avg_win / avg_loss  # payoff ratio
-        kelly = (win_rate * b - (1 - win_rate)) / b
-        return max(0.0, kelly * fraction)
-    
     def get_risk_report(self) -> Dict[str, Any]:
         """Generate comprehensive risk report"""
         status = self.get_daily_status()

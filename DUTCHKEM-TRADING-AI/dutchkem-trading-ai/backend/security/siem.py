@@ -497,6 +497,11 @@ class SIEMEngine:
             if a['severity'] >= ThreatLevel.MEDIUM
         ]
 
+    def get_recent_alerts(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Return the most recent alerts regardless of severity."""
+        with self._engine_lock:
+            return [a.copy() for a in self._alert_buffer[-limit:]]
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------

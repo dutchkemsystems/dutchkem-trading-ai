@@ -63,6 +63,9 @@ prometheus-client>=0.17.0
 gunicorn==22.0.0
 whitenoise==6.7.0
 
+# Infrastructure (V4 Resiliency)
+psutil>=5.9.0
+
 # Utilities
 python-dotenv==1.0.1
 Pillow==10.4.0
@@ -70,3 +73,7 @@ python-dateutil==2.9.0
 pytz==2024.1
 pyjwt==2.9.0
 python-json-logger==2.0.7
+
+# MCP Integration (MT5 async HTTP/WebSocket clients)
+aiohttp>=3.9.0
+websockets>=12.0

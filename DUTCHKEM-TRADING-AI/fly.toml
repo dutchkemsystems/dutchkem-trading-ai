@@ -20,6 +20,13 @@ primary_region = "ams"
     hard_limit = 100
     soft_limit = 80
 
+[[http_service.checks]]
+  grace_period = "10s"
+  interval = "30s"
+  method = "GET"
+  timeout = "10s"
+  path = "/health/"
+
 [[vm]]
   memory = "512mb"
   cpu_kind = "shared"

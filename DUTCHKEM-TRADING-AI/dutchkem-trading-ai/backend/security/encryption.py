@@ -36,6 +36,14 @@ def _get_master_key() -> bytes:
     return _derive_key(secret)
 
 
+def get_encryption() -> "EncryptionService":
+    return EncryptionService()
+
+
+def get_key_rotator() -> "KeyRotator":
+    return KeyRotator()
+
+
 # ---------------------------------------------------------------------------
 # Hashing / HMAC utilities
 # ---------------------------------------------------------------------------
@@ -150,6 +158,9 @@ class EncryptionService:
         elif isinstance(value, (dict, list)):
             encrypted = self.encrypt(json.dumps(value))
             setattr(model_instance, field_name, encrypted.decode("utf-8") if isinstance(encrypted, bytes) else encrypted)
+
+    def hash_value(self, value: str) -> str:
+        return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
     def decrypt_field(self, model_instance: models.Model, field_name: str) -> Any:
         """Decrypt a model field value (after load)."""

@@ -59,7 +59,7 @@ function Dashboard() {
   const freeMargin = portfolio?.free_margin || 0;
   const unrealizedPnl = portfolio?.unrealized_pnl || 0;
   const dailyPnl = dailyPerformance?.today?.total_pnl || 0;
-  const dailyPnlPercent = dailyPerformance?.today?.win_rate || 0;
+  const dailyPnlPercent = dailyPerformance?.today?.daily_growth_percent || 0;
   const drawdown = drawdownStatus?.drawdown_percent || 0;
   const dailyTarget = dailyPerformance?.risk_parameters?.daily_growth_target || 0.14;
 
