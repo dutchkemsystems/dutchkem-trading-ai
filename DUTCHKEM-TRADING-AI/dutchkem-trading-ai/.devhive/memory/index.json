@@ -1,0 +1,165 @@
+{
+  "version": "1.0.0",
+  "project": "dutchkem-trading-ai",
+  "entries": [
+    {
+      "id": "sem-001",
+      "type": "semantic",
+      "summary": "Django backend with 11 apps: accounts, trading, indicators, signals, risk_management, payments, expert_advisors, mcp_integration, market_data, notifications, analytics",
+      "tags": ["backend", "django", "architecture"],
+      "source": "analyzer",
+      "score": 0.95,
+      "project": "dutchkem-trading-ai",
+      "created_at": "2026-08-27"
+    },
+    {
+      "id": "sem-002",
+      "type": "semantic",
+      "summary": "React frontend with MUI Material UI, Redux Toolkit, Recharts, TradingView widget, react-router-dom v6",
+      "tags": ["frontend", "react", "mui", "redux"],
+      "source": "analyzer",
+      "score": 0.95,
+      "project": "dutchkem-trading-ai",
+      "created_at": "2026-08-27"
+    },
+    {
+      "id": "sem-003",
+      "type": "semantic",
+      "summary": "React Native mobile app with Expo, React Navigation, Redux, react-native-paper",
+      "tags": ["mobile", "react-native", "expo"],
+      "source": "analyzer",
+      "score": 0.9,
+      "project": "dutchkem-trading-ai",
+      "created_at": "2026-08-27"
+    },
+    {
+      "id": "sem-004",
+      "type": "semantic",
+      "summary": "JWT authentication with simplejwt, MFA via django-otp TOTP, account lockout after 5 failed attempts",
+      "tags": ["auth", "jwt", "mfa", "security"],
+      "source": "analyzer",
+      "score": 0.9,
+      "project": "dutchkem-trading-ai",
+      "created_at": "2026-08-27"
+    },
+    {
+      "id": "sem-005",
+      "type": "semantic",
+      "summary": "PostgreSQL with TimescaleDB, Redis for caching/channels, InfluxDB for time-series market data, Celery for async tasks",
+      "tags": ["database", "timescaledb", "redis", "influxdb", "celery"],
+      "source": "analyzer",
+      "score": 0.9,
+      "project": "dutchkem-trading-ai",
+      "created_at": "2026-08-27"
+    },
+    {
+      "id": "sem-006",
+      "type": "semantic",
+      "summary": "WebSocket via Django Channels for live prices, MT5 integration via MCP servers",
+      "tags": ["websocket", "channels", "mt5", "mcp"],
+      "source": "analyzer",
+      "score": 0.85,
+      "project": "dutchkem-trading-ai",
+      "created_at": "2026-08-27"
+    },
+    {
+      "id": "sem-007",
+      "type": "semantic",
+      "summary": "Payment gateway is Korapay (NGN primary, GHS, KES, ZAR). Gateway client at payments/gateways/korapay.py, service layer at payments/services.py, webhook at payments/views.py",
+      "tags": ["payments", "korapay", "africa"],
+      "source": "analyzer",
+      "score": 0.95,
+      "project": "dutchkem-trading-ai",
+      "created_at": "2026-08-27"
+    },
+    {
+      "id": "sem-008",
+      "type": "semantic",
+      "summary": "Trading config: MAX_DRAWDOWN=15%, MAX_DAILY_LOSS=3%, MAX_POSITION_SIZE=2%, TARGET_ANNUAL_GROWTH=40%",
+      "tags": ["trading", "risk", "config"],
+      "source": "analyzer",
+      "score": 0.9,
+      "project": "dutchkem-trading-ai",
+      "created_at": "2026-08-27"
+    },
+    {
+      "id": "sem-009",
+      "type": "semantic",
+      "summary": "Frontend fully wired: API service with JWT interceptors, Redux slices with async thunks, all pages use real API",
+      "tags": ["frontend", "api-wiring", "redux"],
+      "source": "analyzer",
+      "score": 0.95,
+      "project": "dutchkem-trading-ai",
+      "created_at": "2026-08-27"
+    },
+    {
+      "id": "sem-010",
+      "type": "semantic",
+      "summary": "CI/CD via GitHub Actions (ci.yml + deploy.yml), Railway deploy with Dockerfile, Procfile, nixpacks.toml",
+      "tags": ["devops", "docker", "railway", "ci-cd"],
+      "source": "analyzer",
+      "score": 0.9,
+      "project": "dutchkem-trading-ai",
+      "created_at": "2026-08-27"
+    },
+    {
+      "id": "sem-011",
+      "type": "semantic",
+      "summary": "InfluxDB pipeline: client.py (write_candle, write_candles_batch, write_tick), ingestion.py (batch buffering, MT5), queries.py (candles, price, ATR, volume profile)",
+      "tags": ["influxdb", "market-data", "pipeline"],
+      "source": "analyzer",
+      "score": 0.9,
+      "project": "dutchkem-trading-ai",
+      "created_at": "2026-08-27"
+    },
+    {
+      "id": "sem-012",
+      "type": "semantic",
+      "summary": "Mobile app fully integrated: services/api.js with SecureStore JWT, store.js with Redux slices, all screens use real data",
+      "tags": ["mobile", "api-integration", "redux"],
+      "source": "analyzer",
+      "score": 0.9,
+      "project": "dutchkem-trading-ai",
+      "created_at": "2026-08-27"
+    },
+    {
+      "id": "sem-013",
+      "type": "semantic",
+      "summary": "Monitoring: config/monitoring.py (PrometheusMetrics, middleware), config/middleware.py (timing, compression, rate-limit), docker/monitoring/ (prometheus, alerts, grafana dashboards)",
+      "tags": ["monitoring", "prometheus", "grafana", "alerts"],
+      "source": "analyzer",
+      "score": 0.9,
+      "project": "dutchkem-trading-ai",
+      "created_at": "2026-08-27"
+    },
+    {
+      "id": "sem-014",
+      "type": "semantic",
+      "summary": "Performance: config/cache.py (multi-DB Redis), trading/selectors.py (optimized queries with select_related/prefetch), config/logging_config.py (structured JSON, rotating files)",
+      "tags": ["performance", "caching", "optimization", "logging"],
+      "source": "analyzer",
+      "score": 0.9,
+      "project": "dutchkem-trading-ai",
+      "created_at": "2026-08-27"
+    },
+    {
+      "id": "sem-015",
+      "type": "semantic",
+      "summary": "Tests: conftest.py (fixtures), tests for accounts, trading, signals, risk_management, payments (Korapay), indicators, mcp_integration, ml, strategies",
+      "tags": ["testing", "pytest", "coverage"],
+      "source": "analyzer",
+      "score": 0.9,
+      "project": "dutchkem-trading-ai",
+      "created_at": "2026-08-27"
+    }
+  ],
+  "anti_patterns": [
+    "Avoid importing Django models in __init__.py files",
+    "Avoid creating documentation files unless explicitly requested",
+    "Avoid leaving comments unless absolutely necessary for complex logic",
+    "Always use select_related/prefetch_related for foreign key queries",
+    "Never hardcode secrets - always use os.environ.get()",
+    "Prefer Django's built-in auth system over custom solutions",
+    "Use JSON structured logging for production - not print statements"
+  ]
+}

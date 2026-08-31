@@ -1,0 +1,30 @@
+{
+  "version": "1.0",
+  "project": "dutchkem-trading-ai",
+  "type": "django-react-forex-platform",
+  "created_at": "2026-08-28",
+  "last_updated": "2026-08-28",
+  "entries": [
+    {
+      "id": "project-structure",
+      "topic": "Project Structure",
+      "summary": "Django 6.1 + React 18 forex trading platform. Root config at dutchkem-trading-ai/backend/config/settings.py",
+      "file_refs": ["dutchkem-trading-ai/backend/config/settings.py"]
+    },
+    {
+      "id": "fixes-applied",
+      "topic": "Fixes Applied",
+      "summary": "Analytics field names fixed, security issues resolved, N+1 queries fixed, analytics models created, notification service created, seed data command created, frontend Redux slices added"
+    },
+    {
+      "id": "backend-apps",
+      "topic": "Backend Apps",
+      "summary": "11 Django apps: accounts, trading, indicators, signals, risk_management, payments, expert_advisors, mcp_integration, market_data, notifications, analytics"
+    },
+    {
+      "id": "admin-state",
+      "topic": "Admin Registrations",
+      "summary": "All admin files have proper registrations including analytics (new models)"
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+# ============================================
+# Stage 1: Builder - Install dependencies & collect static files
+# ============================================
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy and install Python requirements
+COPY dutchkem-trading-ai/backend/requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# Copy application code
+COPY dutchkem-trading-ai/backend/ .
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/staticfiles /app/media
+
+# Collect static files
+RUN SECRET_KEY=placeholder python manage.py collectstatic --noinput --settings=config.settings_production 2>/dev/null || true
+
+# ============================================
+# Stage 2: Runtime - Production-ready image
+# ============================================
+FROM python:3.11-slim AS runtime
+
+WORKDIR /app
+
+# Install runtime system dependencies
+RUN apt-get update && apt-get install -y \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy installed Python packages from builder
+COPY --from=builder /install /usr/local
+
+# Copy application code and static files
+COPY --from=builder /app /app
+
+# Create non-root user
+RUN adduser --disabled-password --gecos '' appuser && \
+    chown -R appuser:appuser /app
+USER appuser
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    DJANGO_SETTINGS_MODULE=config.settings_production \
+    PORT=8000
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/health/ || exit 1
+
+# Stop signal
+STOPSIGNAL SIGTERM
+
+# Run with gunicorn (WSGI) - use daphne for WebSocket support if needed
+CMD ["gunicorn", "config.wsgi:application", \
+     "--bind", "0.0.0.0:8000", \
+     "--workers", "3", \
+     "--threads", "2", \
+     "--timeout", "120", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-"]
