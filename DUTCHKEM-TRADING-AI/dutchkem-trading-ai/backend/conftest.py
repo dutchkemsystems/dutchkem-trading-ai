@@ -1,3 +1,12 @@
+import os
+import sys
+
+# Add the project root (parent of backend/) to sys.path so `strategies` and
+# other non-Django-app packages are importable during tests.
+_project_root = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
 import pytest
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch

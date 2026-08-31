@@ -3,15 +3,19 @@
 
 from celery.schedules import crontab
 
-# ── Configurable symbol list ────────────────────────────────────────────
-# Add/remove symbols here; every indicator + signal task fans out over these.
-ACTIVE_SYMBOLS = [
-    "EURUSD",
-    "GBPUSD",
-    "USDJPY",
-    "AUDUSD",
-    "XAUUSD",
-]
+# ── Configurable symbol list ────────────────────────────────────────
+# Use V6 MarketScanner defaults when available; fall back to static list.
+try:
+    from ml.market_scanner import MarketScanner
+    ACTIVE_SYMBOLS = list(MarketScanner.DEFAULT_SYMBOLS)
+except ImportError:
+    ACTIVE_SYMBOLS = [
+        "EURUSD",
+        "GBPUSD",
+        "USDJPY",
+        "AUDUSD",
+        "XAUUSD",
+    ]
 
 # Timeframe → cron interval mapping
 TIMEFRAME_SCHEDULE = {
@@ -86,6 +90,11 @@ STATIC_TASKS = {
     "run-v6-trading-cycle": {
         "task": "config.tasks.run_v6_trading_cycle",
         "schedule": 60.0,
+    },
+    # ── V6.5 Self-Optimization — runs every 24 hours ──────────────
+    "run-v6-optimization": {
+        "task": "config.tasks.run_v6_optimization",
+        "schedule": crontab(minute=0, hour=3),  # 03:00 UTC daily
     },
 }
 

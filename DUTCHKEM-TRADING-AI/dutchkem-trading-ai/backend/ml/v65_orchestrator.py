@@ -28,6 +28,35 @@ from typing import Any, Dict, List, Optional
 
 from ml.cache import MLCache
 
+# V6 additions — lazy imports to avoid circular deps
+try:
+    from ml.ai_engine import AIEngine
+    _AI_ENGINE_AVAILABLE = True
+except ImportError:
+    AIEngine = None  # type: ignore[assignment,misc]
+    _AI_ENGINE_AVAILABLE = False
+
+try:
+    from ml.market_scanner import MarketScanner
+    _MARKET_SCANNER_AVAILABLE = True
+except ImportError:
+    MarketScanner = None  # type: ignore[assignment,misc]
+    _MARKET_SCANNER_AVAILABLE = False
+
+try:
+    from security.facade import SecurityLayer
+    _SECURITY_LAYER_AVAILABLE = True
+except ImportError:
+    SecurityLayer = None  # type: ignore[assignment,misc]
+    _SECURITY_LAYER_AVAILABLE = False
+
+try:
+    from ml.models.hmm_regime_detector import HMMRegimeDetector
+    _HMM_REGIME_AVAILABLE = True
+except ImportError:
+    HMMRegimeDetector = None  # type: ignore[assignment,misc]
+    _HMM_REGIME_AVAILABLE = False
+
 logger = logging.getLogger("ml.v65_orchestrator")
 
 
@@ -66,6 +95,12 @@ class V65TradingOrchestrator:
         self.time_based_exit = None
         self.execution_optimizer = None
 
+        # V6 additions (lazy loaded)
+        self.ai_engine = None
+        self.market_scanner = None
+        self.security_layer = None
+        self.hmm_regime = None
+
         # V6.5 enhancements (lazy loaded)
         self.sentiment_analyzer = None
         self.news_trader = None
@@ -78,10 +113,17 @@ class V65TradingOrchestrator:
         self.adaptive_tp = None
         self.optimizer = None
 
+        # Persistent position tracking across cycles
+        self.open_positions: List[Dict] = []
+
+        # Component health tracking
+        self._component_health: Dict[str, bool] = {}
+
         self._initialized = False
         self._cycle_count = 0
         self._total_cycle_time_ms = 0.0
         self._last_phase_timings: Dict[str, float] = {}
+        self._closed_this_cycle = False
 
     def _lazy_load(self, module_path: str, attr_name: str, friendly_name: str):
         try:
@@ -90,9 +132,22 @@ class V65TradingOrchestrator:
             cls = getattr(mod, attr_name)
             instance = cls()
             logger.info("V6.5 loaded: %s", friendly_name)
+            self._component_health[friendly_name] = True
             return instance
-        except (ImportError, AttributeError, Exception) as e:
-            logger.warning("V6.5 component not available: %s (%s)", friendly_name, e)
+        except (ImportError, ModuleNotFoundError) as e:
+            # Expected when optional components are not installed
+            logger.debug("V6.5 optional component not installed: %s (%s)", friendly_name, e)
+            self._component_health[friendly_name] = False
+            return None
+        except AttributeError as e:
+            # Class not found in module — likely a code-level issue
+            logger.error("V6.5 component class missing: %s (%s)", friendly_name, e)
+            self._component_health[friendly_name] = False
+            return None
+        except Exception as e:
+            # Unexpected error during instantiation
+            logger.error("V6.5 component failed to initialize: %s (%s)", friendly_name, e, exc_info=True)
+            self._component_health[friendly_name] = False
             return None
 
     def initialize(self):
@@ -125,6 +180,45 @@ class V65TradingOrchestrator:
         self.adaptive_tp = self._lazy_load("ml.enhancements.adaptive_take_profit", "AdaptiveTakeProfit", "AdaptiveTP")
         self.optimizer = self._lazy_load("ml.enhancements.self_optimizing_system", "SelfOptimizingSystem", "SelfOptimizer")
 
+        # V6 additions — lazy-load new subsystems
+        if _AI_ENGINE_AVAILABLE and AIEngine is not None:
+            try:
+                self.ai_engine = AIEngine()
+                self.ai_engine.initialize()
+                self._component_health["AIEngine"] = True
+                logger.info("V6.5 loaded: AIEngine")
+            except Exception as e:
+                logger.error("V6.5 AIEngine init failed: %s", e)
+                self._component_health["AIEngine"] = False
+
+        if _MARKET_SCANNER_AVAILABLE and MarketScanner is not None:
+            try:
+                self.market_scanner = MarketScanner()
+                self._component_health["MarketScanner"] = True
+                logger.info("V6.5 loaded: MarketScanner")
+            except Exception as e:
+                logger.error("V6.5 MarketScanner init failed: %s", e)
+                self._component_health["MarketScanner"] = False
+
+        if _SECURITY_LAYER_AVAILABLE and SecurityLayer is not None:
+            try:
+                self.security_layer = SecurityLayer()
+                self.security_layer.initialize()
+                self._component_health["SecurityLayer"] = True
+                logger.info("V6.5 loaded: SecurityLayer")
+            except Exception as e:
+                logger.error("V6.5 SecurityLayer init failed: %s", e)
+                self._component_health["SecurityLayer"] = False
+
+        if _HMM_REGIME_AVAILABLE and HMMRegimeDetector is not None:
+            try:
+                self.hmm_regime = HMMRegimeDetector()
+                self._component_health["HMMRegimeDetector"] = True
+                logger.info("V6.5 loaded: HMMRegimeDetector")
+            except Exception as e:
+                logger.error("V6.5 HMMRegimeDetector init failed: %s", e)
+                self._component_health["HMMRegimeDetector"] = False
+
         self._initialized = True
         logger.info("V6.5 Orchestrator initialized — %d components loaded", self.component_count)
 
@@ -138,8 +232,12 @@ class V65TradingOrchestrator:
             self.sentiment_analyzer, self.news_trader, self.order_flow_analyzer,
             self.pattern_recognizer, self.multi_tf_analyzer, self.dynamic_stop_loss,
             self.risk_sizer, self.diversification, self.adaptive_tp, self.optimizer,
+            self.ai_engine, self.market_scanner, self.security_layer, self.hmm_regime,
         ]
         return sum(1 for c in all_components if c is not None)
+
+    # ── Market data cache for exit management ────────────────────────────
+    _market_data_cache: Dict[str, Any] = {}
 
     def run_trading_cycle(self, market_data: Dict[str, Any], broker_client=None, trading_mode: str = "semi") -> Dict[str, Any]:
         self.initialize()
@@ -148,6 +246,18 @@ class V65TradingOrchestrator:
             "timestamp": datetime.now().isoformat(), "version": "6.5",
             "phases": {}, "trade_executed": False, "timings": {},
         }
+
+        # ── PHASE 0: Exit Management — runs FIRST every cycle ──────────
+        # Check all open positions for TP/SL/time exits regardless of
+        # whether a new signal is generated this cycle.
+        with _PhaseTimer("phase0_exit_check_ms", result["timings"]):
+            self._phase14_exit_management({}, market_data)
+
+        # ── FIX 6: Trigger learning on any positions closed this cycle ──
+        if self._closed_this_cycle:
+            logger.info("Positions closed during exit management — triggering learning")
+            self._phase15_learning({}, {})
+            self._closed_this_cycle = False
 
         # ── PHASE 1: Market Scanning ──
         with _PhaseTimer("phase1_scan_ms", result["timings"]):
@@ -240,12 +350,11 @@ class V65TradingOrchestrator:
             )
             result["phases"]["execution"] = exec_result
 
+        # ── PHASE 14: Exit Management — runs every cycle (see Phase 0) ──
+
         if exec_result.get("trade_executed"):
             result["trade_executed"] = True
             result["status"] = "TRADE_EXECUTED"
-
-            with _PhaseTimer("phase14_exit_ms", result["timings"]):
-                self._phase14_exit_management(exec_result)
 
             with _PhaseTimer("phase15_learning_ms", result["timings"]):
                 self._phase15_learning(exec_result, signal_result)
@@ -258,6 +367,21 @@ class V65TradingOrchestrator:
     # ── Phase implementations ───────────────────────────────────────
 
     def _phase1_market_scan(self, market_data: Dict) -> Dict:
+        # Use V6 MarketScanner when available
+        if self.market_scanner:
+            try:
+                opportunities = self.market_scanner.scan_all_instruments(market_data)
+                top = self.market_scanner.get_opportunities(top_n=5)
+                return {
+                    "total_scanned": len(market_data),
+                    "filtered_count": len(opportunities),
+                    "opportunities": top,
+                    "scanner": "MarketScanner",
+                }
+            except Exception as e:
+                logger.error("MarketScanner failed, falling back to inline scan: %s", e)
+
+        # Fallback: inline scan (original logic)
         opportunities = []
         for symbol, data in market_data.items():
             spread = data.get("spread", 999)
@@ -269,10 +393,48 @@ class V65TradingOrchestrator:
             combined = (vol_score * 0.6) + (spr_score * 0.4)
             opportunities.append({"symbol": symbol, "data": data, "score": combined, "spread": spread, "volume": volume})
         opportunities.sort(key=lambda x: x["score"], reverse=True)
-        return {"total_scanned": len(market_data), "filtered_count": len(opportunities), "opportunities": opportunities[:5]}
+        return {"total_scanned": len(market_data), "filtered_count": len(opportunities), "opportunities": opportunities[:5], "scanner": "inline"}
 
     def _phase2_ai_analysis(self, market_data: Dict, scan_result: Dict) -> Dict:
         result = {"regime": "unknown", "predictions": {}}
+
+        # Use V6 AIEngine when available
+        if self.ai_engine:
+            try:
+                ai_pred = self.ai_engine.predict(
+                    scan_result["opportunities"][0]["symbol"] if scan_result.get("opportunities") else "EURUSD",
+                    market_data,
+                )
+                result["regime"] = ai_pred.get("regime", "unknown")
+                if ai_pred.get("direction"):
+                    result["predictions"][ai_pred.get("symbol", "unknown")] = {
+                        "direction": ai_pred["direction"],
+                        "confidence": ai_pred.get("confidence", 0.0),
+                    }
+                result["ai_engine"] = True
+            except Exception as e:
+                logger.error("AIEngine prediction failed: %s", e)
+
+        # Use HMM regime detector as supplement
+        if self.hmm_regime:
+            try:
+                for sym, data in market_data.items():
+                    closes = data.get("closes", [])
+                    if not closes:
+                        candles = data.get("candles", [])
+                        closes = [float(c.get("close", 0)) for c in candles] if candles else []
+                    if len(closes) >= 20:
+                        returns = [(closes[i] - closes[i - 1]) / closes[i - 1] if closes[i - 1] != 0 else 0
+                                   for i in range(max(1, len(closes) - 20), len(closes))]
+                        hmm_regime = self.hmm_regime.predict(returns)
+                        if hmm_regime and hmm_regime != "UNKNOWN":
+                            result["regime"] = hmm_regime
+                            result["hmm_regime"] = True
+                        break
+            except Exception as e:
+                logger.error("HMMRegimeDetector prediction failed: %s", e)
+
+        # Fallback to existing regime detector + ensemble
         top = scan_result["opportunities"][0] if scan_result.get("opportunities") else None
         if top and self.regime_detector:
             try:
@@ -291,11 +453,10 @@ class V65TradingOrchestrator:
                 try:
                     candles = opp["data"].get("candles", [])
                     if candles and len(candles) >= 60:
-                        loop = asyncio.new_event_loop()
-                        try:
-                            pred = loop.run_until_complete(self.ensemble.predict(symbol=opp["symbol"], timeframe="M5", lookback=200))
-                        finally:
-                            loop.close()
+                        import asyncio
+                        async def _predict(symbol=opp["symbol"]):
+                            return await self.ensemble.predict(symbol=symbol, timeframe="M5", lookback=200)
+                        pred = asyncio.run(_predict())
                         if pred and "error" not in pred:
                             result["predictions"][opp["symbol"]] = pred
                 except Exception as e:
@@ -410,6 +571,22 @@ class V65TradingOrchestrator:
             confidence += pattern_result.get("confidence", 0) * 0.15
             components_used += 1
 
+        # Strategy Diversification (10%) — uses existing strategy_diversification module
+        if self.strategy_diversification:
+            try:
+                top = scan_result["opportunities"][0] if scan_result.get("opportunities") else None
+                if top:
+                    combined = self.strategy_diversification.get_signal_combined(top["data"])
+                    if combined and combined.get("confidence", 0) > 0.5:
+                        action_val = combined.get("action", "NEUTRAL")
+                        if action_val != "NEUTRAL":
+                            div_score = 1 if action_val == "BUY" else -1
+                            score += div_score * combined["confidence"] * 0.10
+                            confidence += combined["confidence"] * 0.10
+                            components_used += 1
+            except Exception:
+                pass
+
         # Multi-TF (25%) — highest weight
         if tf_result.get("available") and tf_result.get("action") != "NEUTRAL":
             tfscore = 1 if tf_result["action"] == "BUY" else -1
@@ -472,21 +649,108 @@ class V65TradingOrchestrator:
             "score": score, "components_used": components_used,
         }
 
+    # ── Helper methods for dynamic risk parameters ───────────────────
+
+    def _get_account_balance(self):
+        """Fetch real account balance from MT5."""
+        try:
+            from mcp_integration.services import MT5Service
+            service = MT5Service()
+            loop = asyncio.new_event_loop()
+            try:
+                info = loop.run_until_complete(service.get_account_info())
+                return info.get("balance", 10000.0)
+            finally:
+                loop.close()
+        except Exception:
+            return 10000.0
+
+    def _get_current_drawdown(self):
+        """Get current drawdown from DrawdownMonitor (as decimal)."""
+        try:
+            from risk_management.models import DrawdownMonitor
+            monitor = DrawdownMonitor.objects.filter(user_id=1).first()
+            if monitor:
+                return monitor.current_drawdown / 100.0  # Convert percentage to decimal
+        except Exception:
+            pass
+        return 0.02
+
     def _phase9_risk_management(self, signal_result: Dict, market_data: Dict) -> Dict:
         signal = signal_result.get("signal", {})
         symbol = signal.get("symbol", "")
 
+        # ── FIX 1: DrawdownMonitor circuit-breaker check ──────────────
+        try:
+            from risk_management.models import DrawdownMonitor
+            monitor, _ = DrawdownMonitor.objects.get_or_create(user_id=1)
+            if monitor.is_circuit_breaker_triggered:
+                logger.warning("Circuit breaker triggered (tier %s) — rejecting trade", monitor.current_tier)
+                return {"approved": False, "reason": "Circuit breaker triggered", "tier": monitor.current_tier}
+        except Exception as e:
+            logger.debug("DrawdownMonitor unavailable: %s", e)
+
+        # ── FIX 1b: Daily performance limit check ─────────────────────
+        try:
+            from risk_management.models import DailyPerformance
+            from datetime import date as _date
+            daily = DailyPerformance.objects.filter(user_id=1, date=_date.today()).first()
+            if daily and daily.total_pnl < -(daily.starting_balance * 0.02):  # 2% daily loss limit
+                logger.warning("Daily loss limit reached: pnl=%.2f vs limit=%.2f",
+                               daily.total_pnl, -(daily.starting_balance * 0.02))
+                return {"approved": False, "reason": "Daily loss limit reached"}
+        except Exception as e:
+            logger.debug("DailyPerformance unavailable: %s", e)
+
+        # ── FIX 1c: Enforce 4-tier circuit breaker size reduction ─────
+        size_multiplier = 1.0
+        try:
+            from risk_management.models import DrawdownMonitor
+            monitor = DrawdownMonitor.objects.filter(user_id=1).first()
+            if monitor:
+                tier = monitor.get_drawdown_recovery_tier()
+                size_multiplier = {0: 1.0, 1: 0.5, 2: 0.25, 3: 0.0, 4: 0.0}.get(tier, 1.0)
+        except Exception:
+            pass
+
+        # ── FIX 2: Dynamic risk parameters (replaces hardcoded values) ─
         if self.risk_sizer:
             conf = signal.get("confidence", 0.7)
             vol = market_data.get(symbol, {}).get("volatility_ratio", 1.0)
-            corr = 0.0
-            dd = 0.02
-            regime = "NORMAL"
-            risk_pct = self.risk_sizer.calculate_optimal_risk(10000, conf, vol, corr, dd, regime)
+
+            # Real account balance from MT5 or DB
+            account_balance = self._get_account_balance()
+
+            # Real current drawdown from DrawdownMonitor
+            current_drawdown = self._get_current_drawdown()
+
+            # Real correlation with existing positions
+            avg_correlation = 0.0
+            if self.open_positions and self.diversification:
+                try:
+                    correlations = []
+                    for pos in self.open_positions:
+                        corr_val = abs(self.diversification.get_correlation(symbol, pos["symbol"]))
+                        correlations.append(corr_val)
+                    avg_correlation = sum(correlations) / len(correlations) if correlations else 0.0
+                except Exception:
+                    pass
+
+            # Use regime from Phase 2, not hardcoded
+            regime = signal_result.get("regime", "NORMAL")
+            if regime == "unknown":
+                regime = "NORMAL"
+
+            risk_pct = self.risk_sizer.calculate_optimal_risk(
+                account_balance, conf, vol, avg_correlation, current_drawdown, regime,
+            )
         else:
             risk_pct = 0.01
 
         base_size = 0.01 * (risk_pct / 0.005)
+
+        # Apply circuit breaker size reduction
+        base_size *= size_multiplier
 
         if self.dynamic_kelly:
             try:
@@ -547,7 +811,7 @@ class V65TradingOrchestrator:
         if not self.diversification:
             return {"diversified": True, "reason": "No diversification module", "action": "ACCEPT", "penalty": 1.0}
         signal = signal_result.get("signal", {})
-        return self.diversification.check_diversification(signal.get("symbol", ""), [])
+        return self.diversification.check_diversification(signal.get("symbol", ""), self.open_positions)
 
     def _phase13_execution(self, signal_result, risk_result, sl_result, tp_result, market_data,
                            broker_client=None, trading_mode: str = "semi") -> Dict:
@@ -581,6 +845,17 @@ class V65TradingOrchestrator:
             return result
         if trading_mode == "semi":
             result["pending_approval"] = True
+            # Resolve entry price from signal or market data
+            resolved_entry = signal.get("entry_price", 0.0)
+            if resolved_entry <= 0 and symbol in market_data:
+                resolved_entry = market_data[symbol].get("current_price", 0.0)
+            # Still track as an open position for diversification (pending state)
+            self._add_open_position(symbol, action, float(sl) if sl else 0,
+                                    float(tp) if tp else 0, float(volume) if volume else 0.01,
+                                    signal_result.get("strategy", "v65"),
+                                    entry_price=resolved_entry,
+                                    tp2=float(tp_result.get("tp2", 0)) if tp_result.get("tp2") else 0.0,
+                                    tp3=float(tp_result.get("tp3", 0)) if tp_result.get("tp3") else 0.0)
             return result
 
         if broker_client is None:
@@ -589,45 +864,300 @@ class V65TradingOrchestrator:
 
         try:
             position_type = "BUY" if action.upper() in ("BUY", "LONG") else "SELL"
-            loop = None
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_closed():
-                    loop = None
-            except RuntimeError:
-                loop = None
-            if loop is None:
-                loop = asyncio.new_event_loop()
-                close_loop = True
-            else:
-                close_loop = False
-            try:
-                resp = loop.run_until_complete(broker_client.open_position(
+            import asyncio
+            async def _open_position():
+                return await broker_client.open_position(
                     symbol=symbol, volume=float(volume) if volume else 0.01,
                     position_type=position_type, stop_loss=float(sl) if sl else 0.0,
                     take_profit=float(tp) if tp else 0.0, magic=123456,
                     comment=f"V6.5-{signal_result.get('strategy', 'ai')}",
-                ))
-                if resp and resp.success:
-                    result["trade_executed"] = True
-                    result["broker_response"] = resp.data
-                    result["status"] = "EXECUTED"
-                else:
-                    result["reject_reason"] = f"BROKER_REJECTED: {resp.error if resp else 'no response'}"
-            finally:
-                if close_loop:
-                    loop.close()
+                )
+            resp = asyncio.run(_open_position())
+            if resp and resp.success:
+                result["trade_executed"] = True
+                result["broker_response"] = resp.data
+                result["status"] = "EXECUTED"
+                # Resolve entry price from signal or market data
+                resolved_entry = signal.get("entry_price", 0.0)
+                if resolved_entry <= 0 and symbol in market_data:
+                    resolved_entry = market_data[symbol].get("current_price", 0.0)
+                # Track the open position for diversification & exit management
+                self._add_open_position(symbol, action, float(sl) if sl else 0,
+                                        float(tp) if tp else 0, float(volume) if volume else 0.01,
+                                        signal_result.get("strategy", "v65"),
+                                        entry_price=resolved_entry,
+                                        tp2=float(tp_result.get("tp2", 0)) if tp_result.get("tp2") else 0.0,
+                                        tp3=float(tp_result.get("tp3", 0)) if tp_result.get("tp3") else 0.0)
+            else:
+                result["reject_reason"] = f"BROKER_REJECTED: {resp.error if resp else 'no response'}"
         except Exception as e:
             result["reject_reason"] = f"BROKER_ERROR: {e}"
             logger.error("V6.5 broker execution failed: %s", e, exc_info=True)
         return result
 
-    def _phase14_exit_management(self, exec_result: Dict):
+    def _add_open_position(self, symbol: str, action: str, stop_loss: float,
+                           take_profit: float, volume: float, strategy: str,
+                           entry_price: float = 0.0, tp2: float = 0.0, tp3: float = 0.0):
+        """Add a tracked position to the open positions list.
+
+        ``entry_price`` should be filled from the current market data at the
+        time the trade is recorded.  The caller (Phase 13) is responsible for
+        resolving it from ``market_data[symbol]['current_price']``.
+
+        ``tp2`` and ``tp3`` store all take-profit levels for partial-close
+        logic in Phase 14.
+        """
+        position = {
+            "symbol": symbol,
+            "direction": action.upper(),
+            "entry_price": entry_price,
+            "stop_loss": stop_loss,
+            "take_profit": take_profit,
+            "tp1": take_profit,
+            "tp2": tp2,
+            "tp3": tp3,
+            "volume": volume,
+            "strategy": strategy,
+            "entry_time": datetime.now().isoformat(),
+            "status": "OPEN",
+            "tp1_closed": False,
+            "tp2_closed": False,
+            "tp3_closed": False,
+        }
+        self.open_positions.append(position)
+        logger.info("Position tracked: %s %s @ %.5f (SL=%.5f, TP1=%.5f, TP2=%.5f, TP3=%.5f) — %d open",
+                     action, symbol, entry_price, stop_loss, take_profit, tp2, tp3,
+                     len(self.open_positions))
+
+    def _remove_position(self, position: Dict, exit_reason: str, exit_price: float = 0.0):
+        """Remove a position from open tracking and optionally trigger learning."""
+        position["status"] = "CLOSED"
+        position["exit_reason"] = exit_reason
+        position["exit_time"] = datetime.now().isoformat()
+        position["exit_price"] = exit_price
+        if position in self.open_positions:
+            self.open_positions.remove(position)
+        logger.info("Position closed: %s %s — reason=%s, %d remaining",
+                     position.get("direction", ""), position.get("symbol", ""),
+                     exit_reason, len(self.open_positions))
+
+    def _phase14_exit_management(self, exec_result: Dict, market_data: Dict):
+        """Manage exits: trailing stops, partial closes, SL/TP hits, time exits.
+
+        Uses ``market_data`` to obtain the current price for each tracked
+        symbol and evaluates whether stop-loss, take-profit, trailing stops,
+        partial closes, or time-based exit conditions have been met.  Closed
+        positions are removed from ``self.open_positions`` and fed back to
+        the self-optimizer for continuous learning.
+        """
+        closed_symbols = []
+        for position in list(self.open_positions):  # Iterate copy for safe removal
+            symbol = position.get("symbol", "")
+            direction = position.get("direction", "BUY")
+            entry_price = position.get("entry_price", 0.0)
+            stop_loss = position.get("stop_loss", 0.0)
+            entry_time_str = position.get("entry_time", "")
+
+            # Resolve current price from market data
+            current_price = 0.0
+            sym_data = market_data.get(symbol, {})
+            if sym_data:
+                current_price = sym_data.get("current_price", 0.0)
+                # Also try to use the latest candle close if available
+                candles = sym_data.get("candles", [])
+                if candles and isinstance(candles, list) and len(candles) > 0:
+                    last_close = float(candles[-1].get("close", 0))
+                    if last_close > 0:
+                        current_price = last_close
+
+            if current_price <= 0 or entry_price <= 0:
+                continue  # Can't evaluate without valid prices
+
+            # ── 1. TRAILING STOP LOGIC ───────────────────────────────
+            if direction == "BUY":
+                profit_pips = (current_price - entry_price) * 10000
+                if profit_pips >= 5:  # Only trail after 5 pips profit
+                    if profit_pips < 10:
+                        trail_distance = 0.0005  # 5 pips
+                    elif profit_pips < 20:
+                        trail_distance = 0.0010  # 10 pips
+                    elif profit_pips < 50:
+                        trail_distance = 0.0015  # 15 pips
+                    else:
+                        trail_distance = 0.0020  # 20 pips
+
+                    new_stop = current_price - trail_distance
+                    if new_stop > stop_loss:
+                        position["stop_loss"] = new_stop
+                        stop_loss = new_stop  # Update local reference
+                        logger.info("Trailing stop moved UP to %.5f for %s", new_stop, symbol)
+            else:  # SELL
+                profit_pips = (entry_price - current_price) * 10000
+                if profit_pips >= 5:
+                    if profit_pips < 10:
+                        trail_distance = 0.0005
+                    elif profit_pips < 20:
+                        trail_distance = 0.0010
+                    elif profit_pips < 50:
+                        trail_distance = 0.0015
+                    else:
+                        trail_distance = 0.0020
+
+                    new_stop = current_price + trail_distance
+                    if new_stop < stop_loss or stop_loss == 0:
+                        position["stop_loss"] = new_stop
+                        stop_loss = new_stop
+                        logger.info("Trailing stop moved DOWN to %.5f for %s", new_stop, symbol)
+
+            # ── 2. BREAKEVEN STOP ────────────────────────────────────
+            if direction == "BUY" and (current_price - entry_price) * 10000 >= 5:
+                if stop_loss < entry_price:
+                    position["stop_loss"] = entry_price + 0.0001  # Breakeven + 1 pip
+                    stop_loss = entry_price + 0.0001
+                    logger.info("Breakeven stop set for %s", symbol)
+            elif direction == "SELL" and (entry_price - current_price) * 10000 >= 5:
+                if stop_loss > entry_price or stop_loss == 0:
+                    position["stop_loss"] = entry_price - 0.0001
+                    stop_loss = entry_price - 0.0001
+                    logger.info("Breakeven stop set for %s", symbol)
+
+            # ── 3. PARTIAL CLOSES AT TP LEVELS ───────────────────────
+            tp1 = position.get("tp1", 0)
+            tp2 = position.get("tp2", 0)
+            tp3 = position.get("tp3", 0)
+
+            if direction == "BUY":
+                if not position.get("tp1_closed") and tp1 > 0 and current_price >= tp1:
+                    close_volume = position["volume"] * 0.40  # Close 40%
+                    position["volume"] *= 0.60
+                    position["tp1_closed"] = True
+                    position["stop_loss"] = entry_price + 0.0001  # Move to breakeven
+                    stop_loss = entry_price + 0.0001
+                    logger.info("TP1 hit: closed 40%% of %s, breakeven set (vol=%.4f)", symbol, close_volume)
+
+                if not position.get("tp2_closed") and tp2 > 0 and current_price >= tp2:
+                    close_volume = position["volume"] * 0.50  # Close 50% of remaining
+                    position["volume"] *= 0.50
+                    position["tp2_closed"] = True
+                    logger.info("TP2 hit: closed 50%% of remaining %s (vol=%.4f)", symbol, close_volume)
+
+                if not position.get("tp3_closed") and tp3 > 0 and current_price >= tp3:
+                    exit_price = current_price if current_price > 0 else entry_price
+                    self._close_position(position, "TP3_FULL", exit_price)
+                    closed_symbols.append(symbol)
+                    continue
+            else:  # SELL
+                if not position.get("tp1_closed") and tp1 > 0 and current_price <= tp1:
+                    close_volume = position["volume"] * 0.40
+                    position["volume"] *= 0.60
+                    position["tp1_closed"] = True
+                    position["stop_loss"] = entry_price - 0.0001
+                    stop_loss = entry_price - 0.0001
+                    logger.info("TP1 hit: closed 40%% of %s, breakeven set (vol=%.4f)", symbol, close_volume)
+
+                if not position.get("tp2_closed") and tp2 > 0 and current_price <= tp2:
+                    close_volume = position["volume"] * 0.50
+                    position["volume"] *= 0.50
+                    position["tp2_closed"] = True
+                    logger.info("TP2 hit: closed 50%% of remaining %s (vol=%.4f)", symbol, close_volume)
+
+                if not position.get("tp3_closed") and tp3 > 0 and current_price <= tp3:
+                    exit_price = current_price if current_price > 0 else entry_price
+                    self._close_position(position, "TP3_FULL", exit_price)
+                    closed_symbols.append(symbol)
+                    continue
+
+            # ── 4. STOP LOSS HIT DETECTION ───────────────────────────
+            if direction == "BUY" and current_price <= stop_loss and stop_loss > 0:
+                logger.info("Stop-loss hit for %s %s @ %.5f (SL=%.5f)",
+                            direction, symbol, current_price, stop_loss)
+                self._close_position(position, "STOP_LOSS", current_price)
+                closed_symbols.append(symbol)
+            elif direction == "SELL" and current_price >= stop_loss and stop_loss > 0:
+                logger.info("Stop-loss hit for %s %s @ %.5f (SL=%.5f)",
+                            direction, symbol, current_price, stop_loss)
+                self._close_position(position, "STOP_LOSS", current_price)
+                closed_symbols.append(symbol)
+
+            # ── 5. TIME-BASED EXIT (48 hours) ────────────────────────
+            if entry_time_str:
+                try:
+                    entry_time = datetime.fromisoformat(entry_time_str)
+                    hours_held = (datetime.now() - entry_time).total_seconds() / 3600
+                    if hours_held > 48:
+                        logger.info("Time-based exit for %s after %.1f hours",
+                                    symbol, hours_held)
+                        exit_price = current_price if current_price > 0 else entry_price
+                        self._close_position(position, "TIME_EXIT", exit_price)
+                        closed_symbols.append(symbol)
+                except (ValueError, TypeError):
+                    pass
+
+        if closed_symbols:
+            logger.info("Phase 14 closed %d position(s): %s",
+                        len(closed_symbols), ", ".join(closed_symbols))
+
+        # ── Original time_based_exit module hook (if available) ─────────
         if self.time_based_exit:
             order = exec_result.get("order_details", {})
-            logger.info("Trade registered for exit: %s %s", order.get("action"), order.get("symbol"))
+            logger.info("Trade registered for exit management: %s %s",
+                        order.get("action"), order.get("symbol"))
+
+    def _close_position(self, position: Dict, exit_reason: str, exit_price: float):
+        """Close a position, remove from tracking, and trigger learning.
+
+        Computes a rough PnL from entry_price vs exit_price and passes the
+        result to the self-optimizer so it can learn from wins and losses.
+        """
+        entry_price = position.get("entry_price", 0.0)
+        direction = position.get("direction", "BUY")
+        volume = position.get("volume", 0.01)
+        multiplier = 100000.0  # Standard lot multiplier for forex
+
+        if entry_price > 0 and exit_price > 0:
+            direction_sign = 1 if direction == "BUY" else -1
+            pnl_pips = (exit_price - entry_price) * direction_sign * multiplier
+        else:
+            pnl_pips = 0.0
+
+        trade_result = {
+            "symbol": position.get("symbol", ""),
+            "direction": direction,
+            "entry_price": entry_price,
+            "exit_price": exit_price,
+            "exit_reason": exit_reason,
+            "volume": volume,
+            "pnl_pips": round(pnl_pips, 2),
+            "profit": pnl_pips * volume,  # Approximate monetary profit
+            "strategy": position.get("strategy", ""),
+        }
+
+        self._remove_position(position, exit_reason, exit_price)
+        self._closed_this_cycle = True  # FIX 6: flag for learning trigger
+
+        # Feed result back to the self-optimizer for continuous learning
+        if self.optimizer:
+            try:
+                self.optimizer.update_from_trade(trade_result)
+                logger.info("Self-optimizer updated from %s trade: pnl=%.2f pips",
+                            exit_reason, pnl_pips)
+            except Exception as e:
+                logger.error("Self-optimizer update failed: %s", e)
 
     def _phase15_learning(self, exec_result: Dict, signal_result: Dict):
+        # Update AIEngine from trade results
+        if self.ai_engine:
+            try:
+                self.ai_engine.update_from_trade({
+                    "symbol": exec_result.get("order_details", {}).get("symbol", ""),
+                    "strategy": signal_result.get("strategy", ""),
+                    "confidence": signal_result.get("confidence", 0),
+                    "regime": signal_result.get("regime", "unknown"),
+                    "profit": 0,
+                })
+            except Exception:
+                pass
+
         if self.dynamic_kelly:
             try:
                 self.dynamic_kelly.update_stats({"profit": 0, "symbol": exec_result.get("order_details", {}).get("symbol", "")})
@@ -665,6 +1195,8 @@ class V65TradingOrchestrator:
                 "avg_cycle_time_ms": round(self._total_cycle_time_ms / self._cycle_count, 2) if self._cycle_count > 0 else 0,
                 "last_cycle_timings": self._last_phase_timings,
             },
+            "open_positions_count": len(self.open_positions),
+            "component_health": self._component_health.copy(),
         }
 
 

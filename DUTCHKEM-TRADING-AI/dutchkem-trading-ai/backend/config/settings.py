@@ -1,8 +1,11 @@
+import logging
 import os
 from datetime import timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+logger = logging.getLogger("config.settings")
 
 load_dotenv()
 
@@ -217,15 +220,46 @@ CORS_ALLOW_CREDENTIALS = True
 # Redis
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
-# Channel Layers — use InMemoryChannelLayer when Redis unavailable
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer",
-    },
-}
+# Channel Layers — try Redis first, fall back to InMemoryChannelLayer
+import socket as _socket
 
-# Celery — use memory broker when RabbitMQ unavailable
-CELERY_BROKER_URL = os.getenv("RABBITMQ_URL", "memory://")
+def _redis_available(url: str) -> bool:
+    """Quick check whether a Redis URL is reachable."""
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        host = parsed.hostname or "localhost"
+        port = parsed.port or 6379
+        sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+        sock.settimeout(1)
+        result = sock.connect_ex((host, port))
+        sock.close()
+        return result == 0
+    except Exception:
+        return False
+
+_redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+if _redis_available(_redis_url):
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [_redis_url],
+                "capacity": 1500,
+                "expiry": 10,
+            },
+        },
+    }
+    logger_channel = logging.getLogger("django.channels") if hasattr(logging, "getLogger") else None
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        },
+    }
+
+# Celery — use Redis as broker if available, fall back to memory broker
+CELERY_BROKER_URL = os.getenv("RABBITMQ_URL") or (f"{_redis_url}/1" if _redis_available(_redis_url) else "memory://")
 CELERY_RESULT_BACKEND = "django-db"
 CELERY_CACHE_BACKEND = "django-cache"
 CELERY_ACCEPT_CONTENT = ["json"]

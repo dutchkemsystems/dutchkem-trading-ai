@@ -1,15 +1,43 @@
 # Dutchkem Trading AI — Celery Tasks
 # Background tasks for indicator calculation, signal generation, and EA deployment
 
+import asyncio
 import json
 import logging
 import time
 from datetime import datetime, timedelta
+from typing import Any, Callable, Coroutine, Optional
 
 from celery import shared_task
 from django.utils import timezone
 
 logger = logging.getLogger("tasks")
+
+
+def _run_async(coro_factory: Callable[[], Coroutine], timeout: Optional[float] = None) -> Any:
+    """Run an async coroutine from a synchronous Celery worker.
+
+    Attempts to reuse an existing event loop (e.g. in worker threads);
+    otherwise creates a new loop for the call. This avoids the cost and
+    potential confusion of repeatedly creating / destroying event loops
+    across task invocations.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        # We're inside an already-running loop (shouldn't happen in Celery
+        # sync workers, but guard anyway) — use a new thread.
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(asyncio.run, coro_factory())
+            return future.result(timeout=timeout)
+    else:
+        # Normal Celery sync-worker path — use asyncio.run (Python 3.7+)
+        # which handles loop creation, teardown, and pending tasks cleanly.
+        return asyncio.run(coro_factory())
 
 
 @shared_task(bind=True, max_retries=3, rate_limit="10/m", soft_time_limit=120, time_limit=180)
@@ -21,7 +49,6 @@ def calculate_indicators(self, symbol_id: str, timeframe_code: str):
     Fetches real OHLCV data from MT5 via MCP integration.
     """
     try:
-        import asyncio
         from strategies.timeframe_strategies import calculate_signal
         from indicators.models import Indicator, IndicatorValue, Timeframe
         from trading.models import Symbol
@@ -31,13 +58,7 @@ def calculate_indicators(self, symbol_id: str, timeframe_code: str):
         timeframe = Timeframe.objects.get(code=timeframe_code)
 
         # Fetch real OHLCV data from MT5 via MCP
-        loop = asyncio.new_event_loop()
-        try:
-            candles = loop.run_until_complete(
-                mt5_service.get_candles(symbol.name, timeframe_code, count=200)
-            )
-        finally:
-            loop.close()
+        candles = _run_async(lambda: mt5_service.get_candles(symbol.name, timeframe_code, count=200))
 
         if not candles or not isinstance(candles, list) or len(candles) < 5:
             logger.warning("Insufficient candle data for %s %s, using minimal fallback", symbol.name, timeframe_code)
@@ -94,7 +115,6 @@ def generate_signals(self, symbol_id: str):
     Fetches real OHLCV data from MT5 via MCP integration.
     """
     try:
-        import asyncio
         from decimal import Decimal
 
         from strategies.confluence import TimeframeSignal, confluence_engine
@@ -111,44 +131,37 @@ def generate_signals(self, symbol_id: str):
         timeframe_signals = {}
         timeframes = ["M5", "M15", "M30", "H1", "H2", "H4"]
 
-        # Fetch data for all timeframes via MT5 in parallel-style
-        loop = asyncio.new_event_loop()
-        try:
-            for tf in timeframes:
-                try:
-                    candles = loop.run_until_complete(
-                        mt5_service.get_candles(symbol.name, tf, count=200)
-                    )
-                except Exception as tf_exc:
-                    logger.warning("MT5 fetch failed for %s %s: %s", symbol.name, tf, tf_exc)
-                    candles = []
+        for tf in timeframes:
+            try:
+                candles = _run_async(lambda t=tf: mt5_service.get_candles(symbol.name, t, count=200))
+            except Exception as tf_exc:
+                logger.warning("MT5 fetch failed for %s %s: %s", symbol.name, tf, tf_exc)
+                candles = []
 
-                if candles and isinstance(candles, list) and len(candles) >= 3:
-                    ohlcv_data = {
-                        "open": [float(c.get("open", 0)) for c in candles],
-                        "high": [float(c.get("high", 0)) for c in candles],
-                        "low": [float(c.get("low", 0)) for c in candles],
-                        "close": [float(c.get("close", 0)) for c in candles],
-                        "volume": [int(c.get("volume", 0)) for c in candles],
-                    }
-                else:
-                    ohlcv_data = {
-                        "open": [], "high": [], "low": [],
-                        "close": [], "volume": [],
-                    }
+            if candles and isinstance(candles, list) and len(candles) >= 3:
+                ohlcv_data = {
+                    "open": [float(c.get("open", 0)) for c in candles],
+                    "high": [float(c.get("high", 0)) for c in candles],
+                    "low": [float(c.get("low", 0)) for c in candles],
+                    "close": [float(c.get("close", 0)) for c in candles],
+                    "volume": [int(c.get("volume", 0)) for c in candles],
+                }
+            else:
+                ohlcv_data = {
+                    "open": [], "high": [], "low": [],
+                    "close": [], "volume": [],
+                }
 
-                result = calculate_signal(tf, ohlcv_data)
+            result = calculate_signal(tf, ohlcv_data)
 
-                timeframe_signals[tf] = TimeframeSignal(
-                    timeframe=tf,
-                    signal_type=result.get("signal", "NEUTRAL"),
-                    strength=Decimal(str(result.get("strength", 0))),
-                    indicators=result.get("indicators", {}),
-                    stop_loss_pips=result.get("stop_loss_pips", 50),
-                    take_profit_pips=result.get("take_profit_pips", 100),
-                )
-        finally:
-            loop.close()
+            timeframe_signals[tf] = TimeframeSignal(
+                timeframe=tf,
+                signal_type=result.get("signal", "NEUTRAL"),
+                strength=Decimal(str(result.get("strength", 0))),
+                indicators=result.get("indicators", {}),
+                stop_loss_pips=result.get("stop_loss_pips", 50),
+                take_profit_pips=result.get("take_profit_pips", 100),
+            )
 
         # Calculate confluence
         confluence_result = confluence_engine.calculate_confluence(
@@ -172,7 +185,6 @@ def generate_signals(self, symbol_id: str):
 
         # Store signal if confluence is strong enough
         if confluence_engine.should_trade(confluence_result):
-            # Resolve the H1 timeframe as the primary timeframe for multi-timeframe signals
             h1_tf = TFModel.objects.filter(code="H1").first()
             Signal.objects.create(
                 symbol=symbol,
@@ -360,17 +372,12 @@ def sync_mt5_data():
     for user in User.objects.filter(is_active=True, mt5_account__isnull=False):
         try:
             from mcp_integration.services import mt5_service
-            import asyncio
 
-            loop = asyncio.new_event_loop()
-            try:
-                result = loop.run_until_complete(mt5_service.get_account_info())
-                if result.get("success"):
-                    user.balance = result.get("data", {}).get("balance", user.balance)
-                    user.equity = result.get("data", {}).get("equity", user.equity)
-                    user.save()
-            finally:
-                loop.close()
+            result = _run_async(lambda: mt5_service.get_account_info())
+            if result.get("success"):
+                user.balance = result.get("data", {}).get("balance", user.balance)
+                user.equity = result.get("data", {}).get("equity", user.equity)
+                user.save()
         except Exception as exc:
             logger.error("MT5 sync failed for user %s: %s", user.username, exc)
 
@@ -388,22 +395,17 @@ def ingest_market_data():
     for symbol in Symbol.objects.filter(is_active=True):
         try:
             from mcp_integration.services import mt5_service
-            import asyncio
 
-            loop = asyncio.new_event_loop()
-            try:
-                tick = loop.run_until_complete(mt5_service.get_tick_data(symbol.name))
-                if tick:
-                    LivePrice.objects.update_or_create(
-                        symbol=symbol,
-                        defaults={
-                            "bid": tick.get("bid", 0),
-                            "ask": tick.get("ask", 0),
-                            "spread": tick.get("spread", 0),
-                        },
-                    )
-            finally:
-                loop.close()
+            tick = _run_async(lambda s=symbol: mt5_service.get_tick_data(s.name))
+            if tick:
+                LivePrice.objects.update_or_create(
+                    symbol=symbol,
+                    defaults={
+                        "bid": tick.get("bid", 0),
+                        "ask": tick.get("ask", 0),
+                        "spread": tick.get("spread", 0),
+                    },
+                )
         except Exception as exc:
             logger.error("Market data ingestion failed for symbol %s: %s", symbol.name, exc)
 
@@ -519,26 +521,12 @@ def train_model(self, model_type: str, symbol: str = "EURUSD", timeframe: str = 
     try:
         if model_type == "lstm":
             from ml.training.train_lstm import LSTMTrainer
-            import asyncio
             trainer = LSTMTrainer()
-            loop = asyncio.new_event_loop()
-            try:
-                result = loop.run_until_complete(
-                    trainer.train_walk_forward(symbol=symbol, timeframe=timeframe)
-                )
-            finally:
-                loop.close()
+            result = _run_async(lambda: trainer.train_walk_forward(symbol=symbol, timeframe=timeframe))
         elif model_type == "regime":
             from ml.training.train_regime import RegimeTrainer
-            import asyncio
             trainer = RegimeTrainer()
-            loop = asyncio.new_event_loop()
-            try:
-                result = loop.run_until_complete(
-                    trainer.train_walk_forward(symbol=symbol, timeframe=timeframe)
-                )
-            finally:
-                loop.close()
+            result = _run_async(lambda: trainer.train_walk_forward(symbol=symbol, timeframe=timeframe))
         else:
             return {"status": "error", "message": f"Unknown model type: {model_type}"}
 
@@ -574,13 +562,7 @@ def run_backtest(self, backtest_id: str):
 
     # --- Fetch historical OHLCV from MT5 ---
     lookback_count = parameters.get("lookback_bars", 2000)
-    loop = asyncio.new_event_loop()
-    try:
-        candles = loop.run_until_complete(
-            mt5_service.get_candles(symbol, timeframe, count=lookback_count)
-        )
-    finally:
-        loop.close()
+    candles = _run_async(lambda: mt5_service.get_candles(symbol, timeframe, count=lookback_count))
 
     if not candles or not isinstance(candles, list) or len(candles) < 50:
         bt_logger.warning(
@@ -795,6 +777,70 @@ def run_backtest(self, backtest_id: str):
     return {"status": "success", "backtest_id": backtest_id}
 
 
+# ── V6.5 Self-Optimization Task ─────────────────────────────────────
+@shared_task(bind=True, max_retries=1, soft_time_limit=3600, time_limit=3660)
+def run_v6_optimization(self):
+    """
+    Run V6.5 self-optimization every 24 hours.
+
+    Fetches recent historical OHLCV data from MT5 for all active symbols,
+    then feeds it into the genetic optimizer to improve trading parameters.
+    """
+    try:
+        from ml.v65_orchestrator import get_v65_orchestrator
+        orchestrator = get_v65_orchestrator()
+        orchestrator.initialize()
+
+        if not orchestrator.optimizer:
+            logger.warning("V6.5 self-optimizer not available, skipping optimization")
+            return {"status": "SKIPPED", "reason": "optimizer_not_available"}
+
+        if not orchestrator.optimizer.should_optimize():
+            logger.info("V6.5 optimization not yet due (last run: %s)",
+                        orchestrator.optimizer.last_optimization)
+            return {"status": "SKIPPED", "reason": "not_yet_due"}
+
+        # Fetch historical OHLCV from MT5 for optimization
+        from mcp_integration.services import mt5_service
+        historical_data = []
+
+        try:
+            symbols = ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD"]
+            try:
+                from risk_management.models import TradingSettings
+                ts = TradingSettings.get_active()
+                symbols = ts.get_symbol_list()
+            except Exception:
+                pass
+
+            for symbol in symbols:
+                try:
+                    candles = _run_async(lambda s=symbol: mt5_service.get_candles(s, "H1", 2000))
+                    if candles and isinstance(candles, list) and len(candles) >= 100:
+                        historical_data.extend(candles)
+                except Exception as sym_err:
+                    logger.warning("Historical data fetch failed for %s: %s", symbol, sym_err)
+        except Exception as data_err:
+            logger.error("Failed to fetch historical data for optimization: %s", data_err)
+
+        if not historical_data:
+            logger.warning("No historical data available for V6.5 optimization")
+            return {"status": "SKIPPED", "reason": "no_data"}
+
+        # Run the genetic optimization
+        result = orchestrator.optimizer.run_optimization(historical_data)
+        logger.info(
+            "V6.5 optimization completed: fitness=%.4f, params=%s",
+            result.get("fitness_score", 0),
+            {k: v for k, v in result.get("parameters", {}).items() if k in ("rsi_period", "risk_pct", "confidence_threshold")},
+        )
+        return result
+
+    except Exception as e:
+        logger.error("V6.5 optimization failed: %s", e, exc_info=True)
+        return {"status": "ERROR", "error": str(e)}
+
+
 @shared_task(bind=True)
 def run_gold_edge_backtest(self, backtest_id: str):
     """
@@ -850,13 +896,7 @@ def run_gold_edge_backtest(self, backtest_id: str):
 
     # --- Fetch historical OHLCV from MT5 ---
     lookback_count = parameters.get("lookback_bars", 2000)
-    loop = asyncio.new_event_loop()
-    try:
-        candles = loop.run_until_complete(
-            mt5_service.get_candles(symbol, timeframe, count=lookback_count)
-        )
-    finally:
-        loop.close()
+    candles = _run_async(lambda: mt5_service.get_candles(symbol, timeframe, count=lookback_count))
 
     if not candles or not isinstance(candles, list) or len(candles) < 60:
         bt_logger.warning("Insufficient data for Gold Edge backtest %s", backtest_id)
@@ -1022,7 +1062,6 @@ def run_v6_trading_cycle(self):
     Pipeline: Scan -> AI -> Sentiment -> News -> OrderFlow -> Pattern -> MultiTF -> Signal -> Risk -> SL -> TP -> Diversify -> Execute -> Learn
     """
     try:
-        import asyncio
         cycle_start_time = time.time()
 
         # Use V6.5 orchestrator with all 10 enhancements
@@ -1042,10 +1081,17 @@ def run_v6_trading_cycle(self):
 
         # ── Determine trading mode and active symbols from settings ──
         trading_mode = "semi"  # default: semi-auto (requires approval)
-        symbols = [
-            "XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD",
-            "USDCAD", "NZDUSD", "USDCHF", "EURGBP", "EURJPY",
-        ]
+
+        # Use V6 MarketScanner for default symbol list when available
+        try:
+            from ml.market_scanner import MarketScanner
+            symbols = list(MarketScanner.DEFAULT_SYMBOLS)
+        except ImportError:
+            symbols = [
+                "XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD",
+                "USDCAD", "NZDUSD", "USDCHF", "EURGBP", "EURJPY",
+            ]
+
         try:
             from risk_management.models import TradingSettings
             ts = TradingSettings.get_active()
@@ -1054,55 +1100,47 @@ def run_v6_trading_cycle(self):
         except Exception:
             pass
 
-        loop = asyncio.new_event_loop()
-        try:
-            for symbol in symbols:
-                try:
-                    candles = loop.run_until_complete(
-                        mt5_service.get_candles(symbol, "M5", 100)
-                    )
-                    if candles and isinstance(candles, list) and len(candles) >= 10:
-                        closes = [float(c.get("close", 0)) for c in candles]
-                        highs = [float(c.get("high", 0)) for c in candles]
-                        lows = [float(c.get("low", 0)) for c in candles]
+        for symbol in symbols:
+            try:
+                candles = _run_async(lambda s=symbol: mt5_service.get_candles(s, "M5", 100))
+                if candles and isinstance(candles, list) and len(candles) >= 10:
+                    closes = [float(c.get("close", 0)) for c in candles]
+                    highs = [float(c.get("high", 0)) for c in candles]
+                    lows = [float(c.get("low", 0)) for c in candles]
 
-                        # Compute ATR for volatility scaling
-                        trs = []
-                        for i in range(1, len(candles)):
-                            h, l, pc = highs[i], lows[i], closes[i - 1]
-                            trs.append(max(h - l, abs(h - pc), abs(l - pc)))
-                        current_atr = sum(trs[-14:]) / 14.0 if len(trs) >= 14 else 0
-                        historical_atr = sum(trs) / len(trs) if trs else 1
+                    # Compute ATR for volatility scaling
+                    trs = []
+                    for i in range(1, len(candles)):
+                        h, l, pc = highs[i], lows[i], closes[i - 1]
+                        trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+                    current_atr = sum(trs[-14:]) / 14.0 if len(trs) >= 14 else 0
+                    historical_atr = sum(trs) / len(trs) if trs else 1
 
-                        # Get tick data for spread
-                        try:
-                            tick = loop.run_until_complete(
-                                mt5_service.get_tick_data(symbol)
-                            )
-                            spread = tick.get("spread", 0.1) if tick else 0.1
-                        except Exception:
-                            spread = 0.1
+                    # Get tick data for spread
+                    try:
+                        tick = _run_async(lambda s=symbol: mt5_service.get_tick_data(s))
+                        spread = tick.get("spread", 0.1) if tick else 0.1
+                    except Exception:
+                        spread = 0.1
 
-                        market_data[symbol] = {
-                            "candles": candles,
-                            "current_price": closes[-1] if closes else 0,
-                            "spread": spread,
-                            "volume": sum(
-                                int(c.get("volume", 0)) for c in candles[-20:]
-                            ),
-                            "current_atr": current_atr,
-                            "historical_atr": historical_atr,
-                            "highs": highs,
-                            "lows": lows,
-                            "closes": closes,
-                        }
-                except Exception as sym_exc:
-                    logger.warning(
-                        "V6 market data fetch failed for %s: %s", symbol, sym_exc
-                    )
-                    continue
-        finally:
-            loop.close()
+                    market_data[symbol] = {
+                        "candles": candles,
+                        "current_price": closes[-1] if closes else 0,
+                        "spread": spread,
+                        "volume": sum(
+                            int(c.get("volume", 0)) for c in candles[-20:]
+                        ),
+                        "current_atr": current_atr,
+                        "historical_atr": historical_atr,
+                        "highs": highs,
+                        "lows": lows,
+                        "closes": closes,
+                    }
+            except Exception as sym_exc:
+                logger.warning(
+                    "V6 market data fetch failed for %s: %s", symbol, sym_exc
+                )
+                continue
 
         if not market_data:
             logger.warning("V6 cycle: No market data available")
