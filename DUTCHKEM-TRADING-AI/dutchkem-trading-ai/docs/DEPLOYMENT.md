@@ -154,16 +154,19 @@ INFLUXDB_ORG=dutchkem
 
 # MT5
 MT5_HOST=your-mt5-server
-MT5_PORT=1985
+MT5_PORT=8080
 
 # CORS
 ALLOWED_HOSTS=yourdomain.com,localhost
 CORS_ALLOWED_ORIGINS=https://yourdomain.com
 CSRF_TRUSTED_ORIGINS=https://yourdomain.com
 
-# Stripe (Payments)
-STRIPE_SECRET_KEY=sk_live_xxx
-STRIPE_PUBLISHABLE_KEY=pk_live_xxx
+# Korapay (Payments)
+KORA_SECRET_KEY=sk_live_xxx
+KORA_ENCRYPTION_KEY=enc_live_xxx
+KORA_BASE_URL=https://api.korapay.com/merchant/api/v1
+KORA_PUBLIC_KEY=pk_live_xxx
+KORA_WEBHOOK_SECRET=whsec_xxx
 
 # SMTP (Email)
 EMAIL_HOST=smtp.gmail.com

@@ -7,6 +7,7 @@ from .models import (
     PositionSizing,
     RiskAlert,
     RiskParameter,
+    TradingSettings,
 )
 
 
@@ -78,3 +79,20 @@ class DailyPerformanceAdmin(admin.ModelAdmin):
     list_filter = ["date"]
     search_fields = ["user__username"]
     date_hierarchy = "date"
+
+
+@admin.register(TradingSettings)
+class TradingSettingsAdmin(admin.ModelAdmin):
+    list_display = ["name", "trading_mode", "max_spread_pips", "max_slippage_pips", "min_confidence", "is_active"]
+    list_filter = ["trading_mode", "is_active"]
+    fieldsets = (
+        ("Trading Mode", {
+            "fields": ("name", "trading_mode", "is_active"),
+        }),
+        ("Execution Limits", {
+            "fields": ("max_spread_pips", "max_slippage_pips", "min_confidence"),
+        }),
+        ("Symbols", {
+            "fields": ("active_symbols",),
+        }),
+    )

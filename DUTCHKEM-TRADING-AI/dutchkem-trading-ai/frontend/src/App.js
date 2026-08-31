@@ -13,6 +13,7 @@ import Payments from './pages/Payments';
 import ExpertAdvisors from './pages/ExpertAdvisors';
 import Settings from './pages/Settings';
 import Analytics from './pages/Analytics';
+import Monitoring from './pages/Monitoring';
 import { fetchProfile } from './features/auth/authSlice';
 
 const PrivateRoute = ({ children }) => {
@@ -59,6 +60,7 @@ function App() {
           <Route path="payments" element={<Payments />} />
           <Route path="eas" element={<ExpertAdvisors />} />
           <Route path="analytics" element={<Analytics />} />
+          <Route path="monitoring" element={<Monitoring />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>

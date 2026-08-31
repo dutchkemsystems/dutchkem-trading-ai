@@ -849,3 +849,74 @@ class DailyPerformance(models.Model):
             self.daily_pnl_percent = (self.daily_pnl / self.starting_equity) * 100
 
         self.save()
+
+
+class TradingSettings(models.Model):
+    """
+    Global trading mode and execution settings.
+
+    Modes:
+    - auto: V6 cycle executes trades automatically on MT5
+    - semi: V6 generates signals, user approves via dashboard/API
+    - manual: Signals are logged only, no execution
+    """
+
+    TRADING_MODES = [
+        ("auto", "Full Auto — Execute trades automatically"),
+        ("semi", "Semi-Auto — Signals require approval"),
+        ("manual", "Manual — Signals logged only"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, default="Default Trading Settings")
+
+    trading_mode = models.CharField(
+        max_length=10,
+        choices=TRADING_MODES,
+        default="semi",
+        help_text="auto = full auto-trading, semi = requires approval, manual = log only",
+    )
+
+    # Execution parameters
+    max_slippage_pips = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0.5,
+        help_text="Maximum allowed slippage in pips before rejecting a trade",
+    )
+    max_spread_pips = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0.5,
+        help_text="Maximum allowed spread in pips before rejecting a trade",
+    )
+    min_confidence = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0.65,
+        help_text="Minimum signal confidence to consider executing (0.0-1.0)",
+    )
+
+    # Active symbols
+    active_symbols = models.TextField(
+        default="XAUUSD,EURUSD,GBPUSD,USDJPY,AUDUSD,USDCAD,NZDUSD,USDCHF,EURGBP,EURJPY",
+        help_text="Comma-separated list of symbols to trade",
+    )
+
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Trading Settings"
+        verbose_name_plural = "Trading Settings"
+
+    def __str__(self):
+        return f"{self.name} — Mode: {self.get_trading_mode_display()}"
+
+    def get_symbol_list(self):
+        """Return active symbols as a list."""
+        return [s.strip() for s in self.active_symbols.split(",") if s.strip()]
+
+    @classmethod
+    def get_active(cls):
+        """Get or create the active trading settings singleton."""
+        settings, _ = cls.objects.get_or_create(
+            is_active=True,
+            defaults={"name": "Default Trading Settings"},
+        )
+        return settings

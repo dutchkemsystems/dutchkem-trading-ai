@@ -3,6 +3,7 @@
 
 import json
 import logging
+import time
 from datetime import datetime, timedelta
 
 from celery import shared_task
@@ -11,7 +12,7 @@ from django.utils import timezone
 logger = logging.getLogger("tasks")
 
 
-@shared_task(bind=True, max_retries=3)
+@shared_task(bind=True, max_retries=3, rate_limit="10/m", soft_time_limit=120, time_limit=180)
 def calculate_indicators(self, symbol_id: str, timeframe_code: str):
     """
     Calculate indicators for a symbol and timeframe
@@ -80,10 +81,11 @@ def calculate_indicators(self, symbol_id: str, timeframe_code: str):
         }
 
     except Exception as exc:
-        self.retry(exc=exc, countdown=60)
+        logger.error("calculate_indicators failed: %s", exc)
+        self.retry(exc=exc, countdown=60 * (2 ** self.request.retries), max_retries=3)
 
 
-@shared_task(bind=True, max_retries=3)
+@shared_task(bind=True, max_retries=5, rate_limit="5/m", soft_time_limit=300, time_limit=360)
 def generate_signals(self, symbol_id: str):
     """
     Generate multi-timeframe signals for a symbol
@@ -196,10 +198,11 @@ def generate_signals(self, symbol_id: str):
         }
 
     except Exception as exc:
-        self.retry(exc=exc, countdown=60)
+        logger.error("generate_signals failed: %s", exc)
+        self.retry(exc=exc, countdown=60 * (2 ** self.request.retries), max_retries=5)
 
 
-@shared_task(bind=True, max_retries=3)
+@shared_task(bind=True, max_retries=3, rate_limit="2/m", soft_time_limit=600)
 def deploy_ea(self, ea_id: str):
     """
     Deploy Expert Advisor to MT5
@@ -343,7 +346,7 @@ def reset_daily_counters():
         )
 
 
-@shared_task
+@shared_task(rate_limit="1/m")
 def sync_mt5_data():
     """
     Sync account data from MT5
@@ -372,7 +375,7 @@ def sync_mt5_data():
             logger.error("MT5 sync failed for user %s: %s", user.username, exc)
 
 
-@shared_task
+@shared_task(rate_limit="30/m")
 def ingest_market_data():
     """
     Ingest live market data from MT5
@@ -405,7 +408,7 @@ def ingest_market_data():
             logger.error("Market data ingestion failed for symbol %s: %s", symbol.name, exc)
 
 
-@shared_task
+@shared_task(rate_limit="1/m")
 def calculate_performance():
     """
     Calculate and cache trading performance metrics
@@ -510,7 +513,7 @@ def health_check():
         return {"status": "unhealthy", "error": str(exc)}
 
 
-@shared_task(bind=True, max_retries=1)
+@shared_task(bind=True, max_retries=1, soft_time_limit=3600, time_limit=3660)
 def train_model(self, model_type: str, symbol: str = "EURUSD", timeframe: str = "H1"):
     """Train an ML model with required symbol and timeframe parameters."""
     try:
@@ -1011,19 +1014,25 @@ def run_gold_edge_backtest(self, backtest_id: str):
 
 
 # ── V6 Complete Trading Cycle ──────────────────────────────────────
-@shared_task(bind=True, max_retries=3)
+@shared_task(bind=True, max_retries=3, rate_limit="1/m", soft_time_limit=120, time_limit=180)
 def run_v6_trading_cycle(self):
     """
-    V6 Complete Trading Cycle - runs every 60 seconds.
+    V6.5 Complete Trading Cycle - runs every 60 seconds.
     Scans markets, generates signals, manages risk, executes trades.
-
-    Pipeline: Scan -> AI -> Signal -> Risk -> Execute -> Learn
+    Pipeline: Scan -> AI -> Sentiment -> News -> OrderFlow -> Pattern -> MultiTF -> Signal -> Risk -> SL -> TP -> Diversify -> Execute -> Learn
     """
     try:
         import asyncio
-        from ml.v6_orchestrator import get_v6_orchestrator
+        cycle_start_time = time.time()
 
-        orchestrator = get_v6_orchestrator()
+        # Use V6.5 orchestrator with all 10 enhancements
+        try:
+            from ml.v65_orchestrator import get_v65_orchestrator
+            orchestrator = get_v65_orchestrator()
+        except ImportError:
+            from ml.v6_orchestrator import get_v6_orchestrator
+            orchestrator = get_v6_orchestrator()
+            logger.warning("V6.5 not available, falling back to V6")
         orchestrator.initialize()
 
         # ── Fetch market data for all active symbols ────────────────
@@ -1031,10 +1040,19 @@ def run_v6_trading_cycle(self):
 
         market_data = {}
 
+        # ── Determine trading mode and active symbols from settings ──
+        trading_mode = "semi"  # default: semi-auto (requires approval)
         symbols = [
             "XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD",
             "USDCAD", "NZDUSD", "USDCHF", "EURGBP", "EURJPY",
         ]
+        try:
+            from risk_management.models import TradingSettings
+            ts = TradingSettings.get_active()
+            trading_mode = ts.trading_mode
+            symbols = ts.get_symbol_list()
+        except Exception:
+            pass
 
         loop = asyncio.new_event_loop()
         try:
@@ -1091,17 +1109,82 @@ def run_v6_trading_cycle(self):
             return {"status": "NO_DATA"}
 
         # ── Run the V6 trading cycle ────────────────────────────────
-        result = orchestrator.run_trading_cycle(market_data)
+        result = orchestrator.run_trading_cycle(
+            market_data,
+            broker_client=mt5_service,
+            trading_mode=trading_mode,
+        )
 
+        cycle_duration = (time.time() - cycle_start_time) * 1000
         logger.info(
-            "V6 cycle complete: status=%s, trade_executed=%s, components=%d/%d",
+            "V6 cycle complete in %.2fms: status=%s, trade_executed=%s, symbols=%d",
+            cycle_duration,
             result.get("status"),
             result.get("trade_executed"),
             result.get("phases", {}).get("scan", {}).get("filtered_count", 0),
             len(market_data),
         )
+
+        # ── Handle semi-auto mode: save pending trade for approval ──
+        exec_phase = result.get("phases", {}).get("execution", {})
+        if exec_phase.get("pending_approval") and exec_phase.get("order_details"):
+            try:
+                from trading.models import Trade
+                from django.contrib.auth import get_user_model
+
+                User = get_user_model()
+                order = exec_phase["order_details"]
+
+                # Get or create the default admin user for automated signals
+                admin_user = User.objects.filter(is_staff=True).first()
+                if admin_user:
+                    Trade.objects.create(
+                        user=admin_user,
+                        symbol_id=None,  # Will be resolved by symbol name
+                        trade_type=order.get("action", "BUY"),
+                        volume=order.get("volume", 0.01),
+                        stop_loss=order.get("stop_loss", 0),
+                        take_profit=order.get("take_profit", 0),
+                        status="PENDING",
+                        strategy=order.get("strategy", "v6_ai"),
+                        notes=f"V6 AI signal — confidence={order.get('confidence', 0):.2f}",
+                    )
+                    logger.info(
+                        "V6 pending trade saved for approval: %s %s %.4f lots",
+                        order.get("action"), order.get("symbol"), order.get("volume"),
+                    )
+            except Exception as save_err:
+                logger.error("Failed to save pending V6 trade: %s", save_err)
+
         return result
 
     except Exception as e:
         logger.error("V6 trading cycle failed: %s", e, exc_info=True)
-        raise self.retry(exc=e, countdown=60)
+        raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries), max_retries=3)
+
+
+# -- Task Monitoring Signals -------------------------------------------
+from celery.signals import task_success, task_failure, task_retry
+
+
+@task_success.connect
+def handle_task_success(sender=None, **kwargs):
+    """Log successful task completion for monitoring."""
+    logger.info("Task completed successfully: %s", sender.name if sender else "unknown")
+
+
+@task_failure.connect
+def handle_task_failure(sender=None, task_id=None, exception=None, **kwargs):
+    """Log task failures for monitoring and alerting."""
+    logger.error("Task failed: %s (id=%s, error=%s)", sender.name if sender else "unknown", task_id, exception)
+
+
+@task_retry.connect
+def handle_task_retry(sender=None, request=None, reason=None, **kwargs):
+    """Log task retries for monitoring."""
+    logger.warning(
+        "Task retrying: %s (attempt=%s, reason=%s)",
+        sender.name if sender else "unknown",
+        request.retries if request else "unknown",
+        reason,
+    )

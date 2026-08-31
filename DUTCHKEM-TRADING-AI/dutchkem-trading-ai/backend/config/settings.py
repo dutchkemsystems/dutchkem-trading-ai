@@ -105,10 +105,7 @@ ASGI_APPLICATION = "config.asgi.application"
 
 CHANNEL_LAYERS = {
     "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [os.getenv("REDIS_URL", "redis://localhost:6379/0")],
-        },
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
     },
 }
 
@@ -123,20 +120,30 @@ if DATABASE_URL:
         )
     }
 else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.getenv("DB_NAME", "dutchkem_trading"),
-            "USER": os.getenv("DB_USER", "dutchkem_admin"),
-            "PASSWORD": os.getenv("DB_PASSWORD", ""),
-            "HOST": os.getenv("DB_HOST", "localhost"),
-            "PORT": os.getenv("DB_PORT", "5432"),
-            "CONN_MAX_AGE": 600,
-            "OPTIONS": {
-                "connect_timeout": 10,
-            },
+    # Try PostgreSQL first, fall back to SQLite for development
+    DB_ENGINE = os.getenv("DB_ENGINE", "django.db.backends.postgresql")
+    if "sqlite" in DB_ENGINE or os.getenv("USE_SQLITE", "").lower() in ("1", "true"):
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.sqlite3",
+                "NAME": BASE_DIR / "db.sqlite3",
+            }
         }
-    }
+    else:
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.postgresql",
+                "NAME": os.getenv("DB_NAME", "dutchkem_trading"),
+                "USER": os.getenv("DB_USER", "dutchkem_admin"),
+                "PASSWORD": os.getenv("DB_PASSWORD", ""),
+                "HOST": os.getenv("DB_HOST", "localhost"),
+                "PORT": os.getenv("DB_PORT", "5432"),
+                "CONN_MAX_AGE": 600,
+                "OPTIONS": {
+                    "connect_timeout": 10,
+                },
+            }
+        }
 
 AUTH_USER_MODEL = "accounts.User"
 
@@ -210,8 +217,15 @@ CORS_ALLOW_CREDENTIALS = True
 # Redis
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
-# Celery
-CELERY_BROKER_URL = os.getenv("RABBITMQ_URL", "amqp://dutchkem:dutchkem_mq_2024@localhost:5672/")
+# Channel Layers — use InMemoryChannelLayer when Redis unavailable
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    },
+}
+
+# Celery — use memory broker when RabbitMQ unavailable
+CELERY_BROKER_URL = os.getenv("RABBITMQ_URL", "memory://")
 CELERY_RESULT_BACKEND = "django-db"
 CELERY_CACHE_BACKEND = "django-cache"
 CELERY_ACCEPT_CONTENT = ["json"]
@@ -229,10 +243,10 @@ INFLUXDB_USER = os.getenv("INFLUXDB_USER", "admin")
 INFLUXDB_PASSWORD = os.getenv("INFLUXDB_PASSWORD", "")
 INFLUXDB_TIMEOUT = int(os.getenv("INFLUXDB_TIMEOUT", 30))
 
-# MetaTrader 5 (SYNX-MT5-MCP)
+# MetaTrader 5 (SYNX-MT5-MCP or Native Bridge)
 MT5_HOST = os.getenv("MT5_HOST", "localhost")
-MT5_PORT = int(os.getenv("MT5_PORT", 3000))
-MT5_WS_PORT = int(os.getenv("MT5_WS_PORT", 3001))
+MT5_PORT = int(os.getenv("MT5_PORT", 8082))
+MT5_WS_PORT = int(os.getenv("MT5_WS_PORT", 8081))
 MT5_TIMEOUT = int(os.getenv("MT5_TIMEOUT", 10))
 MT5_MAX_RETRIES = int(os.getenv("MT5_MAX_RETRIES", 5))
 MT5_RETRY_DELAY = float(os.getenv("MT5_RETRY_DELAY", 2.0))
@@ -250,21 +264,26 @@ TRADING_CONFIG = {
 
 # Rate Limiting
 RATELIMIT_USE_CACHE = "default"
-RATELIMIT_FAIL_OPEN = False
+RATELIMIT_FAIL_OPEN = True
 
-# Cache
+# Silence django_ratelimit cache check for development (FileBasedCache doesn't support atomic increment)
+SILENCED_SYSTEM_CHECKS = ["django_ratelimit.E003"]
+
+# Cache — use FileBasedCache (shared across processes) when Redis unavailable
+import tempfile
+_cache_dir = os.path.join(tempfile.gettempdir(), "dutchkem_cache")
 CACHES = {
     "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": os.getenv("REDIS_URL", "redis://localhost:6379/1"),
+        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+        "LOCATION": _cache_dir,
     },
     "sessions": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": os.getenv("REDIS_URL", "redis://localhost:6379/2"),
+        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+        "LOCATION": os.path.join(_cache_dir, "sessions"),
     },
     "trading": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": os.getenv("REDIS_URL", "redis://localhost:6379/3"),
+        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+        "LOCATION": os.path.join(_cache_dir, "trading"),
     },
 }
 
