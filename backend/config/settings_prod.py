@@ -344,16 +344,25 @@ MT5_MAX_RETRIES = int(os.environ.get("MT5_MAX_RETRIES", 5))
 MT5_RETRY_DELAY = float(os.environ.get("MT5_RETRY_DELAY", 2.0))
 MT5_MCP_URL = os.environ.get("MT5_MCP_URL", "http://localhost:8082")
 
-# ── Trading Config ──────────────────────────────────────────────────────────
+# ── Trading Config (V6.5 COMPULSORY — dynamically overridden at runtime) ──
 
 TRADING_CONFIG = {
+    # ── Risk limits ──────────────────────────────────────────────────
     "MAX_DRAWDOWN": 0.15,
     "MAX_DAILY_LOSS": 0.03,
     "MAX_POSITION_SIZE": 0.02,
     "MAX_OPEN_POSITIONS": 5,
     "MAX_CORRELATION": 0.7,
     "MIN_RISK_REWARD_RATIO": 2.0,
-    "TARGET_ANNUAL_GROWTH": 0.40,
+
+    # ── Profit targets (V6.5 determines these dynamically) ───────────
+    "TARGET_DAILY_GROWTH": 0.15,
+    "TARGET_WEEKLY_GROWTH": 1.0,
+    "TARGET_MONTHLY_GROWTH": 4.2,
+    "TARGET_ANNUAL_GROWTH": 50.0,
+    "DAILY_LOSS_LIMIT": 2.0,
+    "MAX_DAILY_TRADES": 10,
+    "PROFIT_TARGET_SOURCE": "V6.5_ORCHESTRATOR",
 }
 
 # ── Rate Limiting ───────────────────────────────────────────────────────────

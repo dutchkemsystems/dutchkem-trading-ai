@@ -1,6 +1,9 @@
 """
 V6.5 Enhancements Package
-10 Advanced Enhancements for the Dutchkem Trading AI System
+11 Advanced Enhancements for the Dutchkem Trading AI System
+
+Enhancement 11: ProfitTargetManager — the COMPULSORY and ONLY system
+for determining ALL profit targets (daily, weekly, monthly, annual).
 """
 
 from ml.enhancements.sentiment_analyzer import SentimentAnalyzer
@@ -13,6 +16,7 @@ from ml.enhancements.risk_adjusted_sizer import RiskAdjustedSizer
 from ml.enhancements.artificial_diversification import ArtificialDiversification
 from ml.enhancements.adaptive_take_profit import AdaptiveTakeProfit
 from ml.enhancements.self_optimizing_system import SelfOptimizingSystem
+from ml.enhancements.profit_target_manager import ProfitTargetManager
 
 __all__ = [
     "SentimentAnalyzer",
@@ -25,4 +29,5 @@ __all__ = [
     "ArtificialDiversification",
     "AdaptiveTakeProfit",
     "SelfOptimizingSystem",
+    "ProfitTargetManager",
 ]

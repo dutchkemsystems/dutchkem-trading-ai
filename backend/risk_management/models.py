@@ -8,12 +8,17 @@ class RiskParameter(models.Model):
     """
     Global risk parameters for the trading system
 
-    Daily Focused Targets:
-    - Daily Growth: 0.14% per day (40% annualized / 365)
-    - Monthly Growth: ~4.2% per month
-    - Annual Growth: ~50%+ per year (compounded daily)
+    V6.5 COMPULSORY: All profit targets are now determined dynamically
+    by V6.5's ProfitTargetManager. The default values below serve as
+    initial/fallback values — V6.5 will override them at runtime.
+
+    Daily Focused Targets (V6.5 managed):
+    - Daily Growth: dynamically computed by V6.5 (default ~0.15%)
+    - Weekly Growth: dynamically computed by V6.5 (~1.0% compounding)
+    - Monthly Growth: dynamically computed by V6.5 (~4.2% compounding)
+    - Annual Growth: dynamically computed by V6.5 (~50%+ compounding)
     - Daily Loss Limit: 2% max daily loss
-    - Daily Target Lock: Trading stops at 0.4% daily gain
+    - Daily Target Lock: Trading stops when V6.5 target is reached
     - Max Drawdown: 15% (standard) / 20-40% (Gold Edge)
     - Position Size: 1% per trade
     - Max Daily Trades: 10
@@ -27,15 +32,24 @@ class RiskParameter(models.Model):
         max_digits=5, decimal_places=2, default=2.0, help_text="Maximum daily loss as percentage (default: 2%)"
     )
     daily_growth_target = models.DecimalField(
-        max_digits=5, decimal_places=4, default=0.14, help_text="Daily growth target as percentage (default: 0.14%)"
+        max_digits=5, decimal_places=4, default=0.15,
+        help_text="V6.5 default daily growth target (dynamically overridden at runtime)",
     )
     daily_target_lock = models.DecimalField(
         max_digits=5,
         decimal_places=2,
         default=0.4,
-        help_text="Daily target lock - trading stops after this gain (default: 0.4%)",
+        help_text="V6.5 fallback daily target lock (dynamically overridden at runtime)",
     )
     max_daily_trades = models.IntegerField(default=10, help_text="Maximum number of trades per day (default: 10)")
+
+    # ── Weekly target (NEW — added for V6.5) ────────────────────────
+    weekly_target = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=1.0,
+        help_text="V6.5 default weekly growth target as percentage (dynamically overridden at runtime)",
+    )
 
     # Position sizing
     max_position_size = models.DecimalField(
@@ -59,15 +73,22 @@ class RiskParameter(models.Model):
         max_digits=5, decimal_places=2, default=2.0, help_text="Minimum risk-reward ratio (default: 1:2)"
     )
 
-    # Performance targets
+    # Performance targets (V6.5 COMPULSORY — these are defaults, V6.5 overrides at runtime)
     target_daily_growth = models.DecimalField(
-        max_digits=5, decimal_places=4, default=0.14, help_text="Target daily growth percentage (default: 0.14%)"
+        max_digits=5, decimal_places=4, default=0.15,
+        help_text="V6.5 default daily growth (dynamically computed based on win rate, regime, drawdown)",
+    )
+    target_weekly_growth = models.DecimalField(
+        max_digits=5, decimal_places=2, default=1.0,
+        help_text="V6.5 default weekly growth (compounded from daily, dynamically computed)",
     )
     target_monthly_growth = models.DecimalField(
-        max_digits=5, decimal_places=2, default=4.2, help_text="Target monthly growth percentage (default: 4.2%)"
+        max_digits=5, decimal_places=2, default=4.2,
+        help_text="V6.5 default monthly growth (compounded from weekly, dynamically computed)",
     )
     target_annual_growth = models.DecimalField(
-        max_digits=5, decimal_places=2, default=50.0, help_text="Target annual growth percentage (default: 50%+)"
+        max_digits=5, decimal_places=2, default=50.0,
+        help_text="V6.5 default annual growth (compounded from monthly, dynamically computed)",
     )
 
     # ── Gold Edge specific risk parameters ──────────────────────────
@@ -127,7 +148,7 @@ class RiskParameter(models.Model):
 
     @property
     def daily_target_amount(self):
-        """Calculate daily target amount based on equity"""
+        """Calculate daily target amount based on equity (V6.5 override at runtime)"""
         return lambda equity: equity * (self.daily_growth_target / 100)
 
     def get_max_drawdown(self, strategy: str = "standard") -> float:
@@ -452,11 +473,19 @@ class DrawdownMonitor(models.Model):
                 f"{self.drawdown_percent}% (limit: {effective_max_dd}%)",
             ))
 
-        # Check daily target lock (0.4%)
-        if self.daily_pnl_percent >= risk_params.daily_target_lock:
-            self.is_daily_target_triggered = True
-            self.is_circuit_breaker_triggered = True
-            alerts.append(("DAILY_TARGET", "INFO", f"Daily target reached: {self.daily_pnl_percent}%"))
+        # Check daily target lock — V6.5 determines the target dynamically
+        # If V6.5's ProfitTargetManager is available, it has already set
+        # is_daily_target_triggered on this monitor. Otherwise, fall back
+        # to risk_params.daily_target_lock.
+        if not self.is_daily_target_triggered:
+            # V6.5 has NOT yet set the flag — use risk_params as fallback
+            if self.daily_pnl_percent >= risk_params.daily_target_lock:
+                self.is_daily_target_triggered = True
+                self.is_circuit_breaker_triggered = True
+                alerts.append(("DAILY_TARGET", "INFO", f"Daily target reached: {self.daily_pnl_percent}%"))
+        else:
+            # V6.5 already determined the target was reached
+            alerts.append(("DAILY_TARGET", "INFO", f"V6.5 daily target reached: {self.daily_pnl_percent}%"))
 
         # Check max daily trades (10)
         if self.daily_trades_count >= risk_params.max_daily_trades:

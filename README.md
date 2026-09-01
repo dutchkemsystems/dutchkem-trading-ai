@@ -63,8 +63,11 @@ python manage.py runserver
 # Auto-configure V6.5
 powershell -File scripts/configure-v65.ps1 -TradingMode semi -VirtualBalance 100
 
-# Start V6.5 trading system
+# Start V6.5 full stack (Docker + Django + Celery + MT5 Bridge)
 powershell -File scripts/start-v65.ps1
+
+# Run virtual $1000 simulation
+powershell -File scripts/virtual-1000-sim.ps1 -InitialBalance 1000 -SimulationDays 30
 
 # Run virtual $100 simulation
 powershell -File scripts/virtual-100-sim.ps1 -InitialBalance 100 -SimulationDays 30
@@ -93,9 +96,11 @@ dutchkem-trading-ai/
 │   └── trading/           # Core trading engine
 ├── config/                # Django settings
 ├── scripts/               # Deployment & simulation scripts
+│   ├── virtual-1000-sim.ps1     # V6.5 $1000 simulation
 │   ├── virtual-100-sim.ps1      # V6.5 $100 simulation
+│   ├── virtual-trading-sim.ps1  # Generic trading simulation
 │   ├── configure-v65.ps1        # V6.5 auto-configuration
-│   └── start-v65.ps1            # V6.5 startup script
+│   └── start-v65.ps1            # V6.5 full stack startup
 ├── docs/
 │   └── V6.5-GUIDE.md     # Complete V6.5 documentation
 ├── strategies/            # External strategy definitions
@@ -123,9 +128,11 @@ dutchkem-trading-ai/
 ## Deployment
 
 See deployment guides:
+- [Deployment Checklist](DEPLOY-CHECKLIST.md) — step-by-step production deployment
 - [Render](RENDER_DEPLOY.md)
 - [Railway](RAILWAY_DEPLOY.md)
 - [Fly.io](deploy-fly.ps1)
+- [V6.5 Guide](docs/PROFIT-GUIDE.md) — profit targets and trading simulation
 
 ## License
 

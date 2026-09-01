@@ -12,21 +12,29 @@ logger = logging.getLogger("risk_management.daily_target")
 class DailyTargetLock:
     """
     Daily target tracking and enforcement system.
-    Three target levels: Conservative (0.80%), Moderate (1.45%), Aggressive (2.20%)
+
+    V6.5 COMPULSORY: This class now DEFERS to V6.5's ProfitTargetManager
+    for all target determination. The hardcoded profiles below serve only
+    as fallback values when V6.5 is unavailable.
+
+    Target hierarchy:
+      1. V6.5 ProfitTargetManager (COMPULSORY — dynamic, performance-based)
+      2. Fallback profiles (only when V6.5 is not available)
     """
 
+    # Fallback profiles — used ONLY when V6.5 is unavailable
     TARGET_PROFILES = {
         "conservative": {
             "daily_target_pct": Decimal("0.80"),
-            "description": "Conservative: 0.80% daily target",
+            "description": "V6.5 fallback Conservative profile",
         },
         "moderate": {
             "daily_target_pct": Decimal("1.45"),
-            "description": "Moderate: 1.45% daily target",
+            "description": "V6.5 fallback Moderate profile",
         },
         "aggressive": {
             "daily_target_pct": Decimal("2.20"),
-            "description": "Aggressive: 2.20% daily target",
+            "description": "V6.5 fallback Aggressive profile",
         },
     }
 
@@ -35,6 +43,59 @@ class DailyTargetLock:
     def __init__(self, profile: str = "moderate"):
         self.profile = profile
         self._target_pct = self.TARGET_PROFILES[profile]["daily_target_pct"]
+        self._v65_active = False
+
+    def _get_v65_daily_target(self, user=None) -> Optional[Decimal]:
+        """
+        Attempt to get the daily target from V6.5's ProfitTargetManager.
+        Returns None if V6.5 is not available.
+        """
+        try:
+            from ml.enhancements.profit_target_manager import ProfitTargetManager
+            manager = ProfitTargetManager()
+
+            # Get account data
+            current_equity = float(user.equity) if user and hasattr(user, 'equity') else 10000.0
+            peak_equity = current_equity
+
+            try:
+                from risk_management.models import DrawdownMonitor
+                monitor = DrawdownMonitor.objects.filter(user=user).first() if user else None
+                if monitor:
+                    peak_equity = float(monitor.peak_equity)
+            except Exception:
+                pass
+
+            # Get recent trades
+            recent_trades = []
+            try:
+                from trading.models import Trade
+                recent = Trade.objects.filter(status="CLOSED").order_by("-closed_at")[:50]
+                recent_trades = [{"pnl": float(t.profit_loss or 0)} for t in recent]
+            except Exception:
+                pass
+
+            # Compute V6.5 targets
+            targets = manager.compute_targets(
+                current_equity=current_equity,
+                peak_equity=peak_equity,
+                recent_trades=recent_trades,
+                regime="NORMAL",
+            )
+
+            daily_pct = targets.get("targets", {}).get("daily_pct")
+            if daily_pct is not None:
+                self._v65_active = True
+                logger.info(
+                    "DailyTargetLock: Using V6.5 dynamic target %.4f%% (was %.2f%%)",
+                    daily_pct, float(self._target_pct),
+                )
+                return Decimal(str(daily_pct))
+
+        except Exception as e:
+            logger.debug("V6.5 ProfitTargetManager unavailable for DailyTargetLock: %s", e)
+
+        return None
 
     @property
     def daily_target_pct(self) -> Decimal:
@@ -59,10 +120,19 @@ class DailyTargetLock:
         daily_pnl = current_equity - starting_equity
         daily_pnl_pct = (daily_pnl / starting_equity * 100) if starting_equity > 0 else Decimal("0")
 
-        target_amount = starting_equity * (self._target_pct / 100)
+        # ── V6.5 COMPULSORY: Use V6.5 target if available ────────────
+        v65_target = self._get_v65_daily_target(user)
+        if v65_target is not None:
+            effective_target = v65_target
+            source = "V6.5_ORCHESTRATOR"
+        else:
+            effective_target = self._target_pct
+            source = "FALLBACK_PROFILE"
+
+        target_amount = starting_equity * (effective_target / 100)
         progress_pct = (daily_pnl / target_amount * 100) if target_amount > 0 else Decimal("0")
 
-        is_target_reached = daily_pnl_pct >= self._target_pct
+        is_target_reached = daily_pnl_pct >= effective_target
         is_alert_threshold = progress_pct >= (self.ALERT_THRESHOLD * 100)
         is_loss_limit = daily_pnl_pct <= -Decimal("2.0")
 
@@ -75,7 +145,9 @@ class DailyTargetLock:
         return {
             "date": today.isoformat(),
             "profile": self.profile,
-            "daily_target_pct": str(self._target_pct),
+            "source": source,
+            "daily_target_pct": str(effective_target),
+            "v65_active": self._v65_active,
             "starting_equity": str(starting_equity),
             "current_equity": str(current_equity),
             "daily_pnl": str(daily_pnl),
