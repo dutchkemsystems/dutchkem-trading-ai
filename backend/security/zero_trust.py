@@ -167,7 +167,15 @@ class TrustScorer:
         breakdown["ip_reputation"] = ip_score
 
         # --- Device Fingerprint (20 pts) ---
-        device_score = 20 if device_match else 0
+        # API clients (curl, Postman, etc.) don't send consistent headers,
+        # so a new device fingerprint is common and expected. Give partial
+        # trust when the JWT is valid, instead of zeroing out entirely.
+        if device_match:
+            device_score = 20
+        elif jwt_valid:
+            device_score = 10
+        else:
+            device_score = 0
         breakdown["device"] = device_score
 
         # --- Time-based Anomalies (15 pts) ---
@@ -234,9 +242,15 @@ class ZeroTrustMiddleware(MiddlewareMixin):
     EXEMPT_PATHS = {
         "/api/v1/auth/token/",
         "/api/v1/auth/token/refresh/",
+        "/api/v1/auth/login/",
+        "/api/v1/auth/register/",
+        "/api/v1/auth/",
         "/admin/",
         "/health/",
         "/metrics/",
+        "/swagger/",
+        "/redoc/",
+        "/api/docs/",
     }
 
     def process_request(self, request: HttpRequest) -> Optional[JsonResponse]:
