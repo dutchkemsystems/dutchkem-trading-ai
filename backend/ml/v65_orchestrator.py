@@ -1,23 +1,24 @@
 """
 V6.5 ULTIMATE ENHANCED ORCHESTRATOR
-Integrates all 10 V6.5 enhancements with the existing V6 trading system.
+Integrates all 11 V6.5 enhancements with the existing V6 trading system.
 
 Phases:
-  1. Market Scan      — Scan 3-10 instruments for opportunities
-  2. AI & Regime      — Ensemble prediction + regime detection
-  3. Sentiment        — News + social + order flow sentiment (NEW)
-  4. News Strategy    — Economic event awareness (NEW)
-  5. Order Flow       — Institutional activity detection (NEW)
-  6. Pattern Recog    — Deep learning candlestick patterns (NEW)
-  7. Multi-TF         — Timeframe confluence (NEW)
+  1. Market Scan       — Scan 3-10 instruments for opportunities
+  2. AI & Regime       — Ensemble prediction + regime detection
+  3. Sentiment         — News + social + order flow sentiment (NEW)
+  4. News Strategy     — Economic event awareness (NEW)
+  5. Order Flow        — Institutional activity detection (NEW)
+  6. Pattern Recog     — Deep learning candlestick patterns (NEW)
+  7. Multi-TF          — Timeframe confluence (NEW)
   8. Signal Generation — Combined signal from all sources
-  9. Risk Management  — Dynamic sizing + correlation + volatility
-  10. Stop-Loss       — Adaptive stop calculation (NEW)
-  11. Take-Profit     — Adaptive TP with partial closes (NEW)
-  12. Diversification — Portfolio diversification check (NEW)
-  13. Execution       — Spread/slippage checks, order routing
-  14. Exit Management — Time-based progressive exits
-  15. Learning        — Self-optimizing parameters (NEW)
+  9. Risk Management   — Dynamic sizing + correlation + volatility
+  10. Stop-Loss        — Adaptive stop calculation (NEW)
+  11. Take-Profit      — Adaptive TP with partial closes (NEW)
+  12. Diversification  — Portfolio diversification check (NEW)
+  13. Execution        — Spread/slippage checks, order routing
+  14. Exit Management  — Time-based progressive exits
+  15. Learning         — Self-optimizing parameters (NEW)
+  16. Profit Targets   — COMPULSORY dynamic target management (NEW)
 """
 
 import asyncio
@@ -113,6 +114,9 @@ class V65TradingOrchestrator:
         self.adaptive_tp = None
         self.optimizer = None
 
+        # V6.5 Enhancement 11: Profit Target Manager (COMPULSORY)
+        self.profit_target_manager = None
+
         # Persistent position tracking across cycles
         self.open_positions: List[Dict] = []
 
@@ -180,6 +184,21 @@ class V65TradingOrchestrator:
         self.adaptive_tp = self._lazy_load("ml.enhancements.adaptive_take_profit", "AdaptiveTakeProfit", "AdaptiveTP")
         self.optimizer = self._lazy_load("ml.enhancements.self_optimizing_system", "SelfOptimizingSystem", "SelfOptimizer")
 
+        # V6.5 Enhancement 11: Profit Target Manager — COMPULSORY
+        self.profit_target_manager = self._lazy_load(
+            "ml.enhancements.profit_target_manager", "ProfitTargetManager", "ProfitTargetMgr"
+        )
+        if self.profit_target_manager is None:
+            # Fallback: import directly since it's a pure-Python module
+            try:
+                from ml.enhancements.profit_target_manager import ProfitTargetManager
+                self.profit_target_manager = ProfitTargetManager()
+                self._component_health["ProfitTargetMgr"] = True
+                logger.info("V6.5 loaded: ProfitTargetManager (fallback import)")
+            except Exception as e:
+                logger.error("V6.5 ProfitTargetManager failed to load: %s", e)
+                self._component_health["ProfitTargetMgr"] = False
+
         # V6 additions — lazy-load new subsystems
         if _AI_ENGINE_AVAILABLE and AIEngine is not None:
             try:
@@ -232,6 +251,7 @@ class V65TradingOrchestrator:
             self.sentiment_analyzer, self.news_trader, self.order_flow_analyzer,
             self.pattern_recognizer, self.multi_tf_analyzer, self.dynamic_stop_loss,
             self.risk_sizer, self.diversification, self.adaptive_tp, self.optimizer,
+            self.profit_target_manager,
             self.ai_engine, self.market_scanner, self.security_layer, self.hmm_regime,
         ]
         return sum(1 for c in all_components if c is not None)
@@ -258,6 +278,19 @@ class V65TradingOrchestrator:
             logger.info("Positions closed during exit management — triggering learning")
             self._phase15_learning({}, {})
             self._closed_this_cycle = False
+
+        # ── PHASE 16: Profit Target Management (COMPULSORY) ───────────
+        # V6.5 is the ONLY system that determines profit targets.
+        # This phase runs BEFORE signal generation to enforce targets.
+        with _PhaseTimer("phase16_profit_targets_ms", result["timings"]):
+            pt_result = self._phase16_profit_targets(market_data)
+            result["phases"]["profit_targets"] = pt_result
+
+        # If V6.5 determined trading should stop, skip the rest
+        if not pt_result.get("trading_allowed", True):
+            result["status"] = "TARGET_REACHED"
+            self._record_cycle(cycle_start, result)
+            return result
 
         # ── PHASE 1: Market Scanning ──
         with _PhaseTimer("phase1_scan_ms", result["timings"]):
@@ -777,7 +810,7 @@ class V65TradingOrchestrator:
             except Exception:
                 pass
 
-        base_size = max(0.001, min(0.02, base_size))
+        base_size = max(0.01, min(0.02, base_size))
         return {"approved": True, "position_size": base_size, "adjusted_size": base_size, "risk_pct": risk_pct}
 
     def _phase10_dynamic_stoploss(self, signal_result: Dict, market_data: Dict) -> Dict:
@@ -1178,6 +1211,150 @@ class V65TradingOrchestrator:
                 self.optimizer.update_from_trade(exec_result.get("order_details", {}))
             except Exception:
                 pass
+
+    # ── PHASE 16: Profit Target Management (COMPULSORY) ───────────────
+    def _phase16_profit_targets(self, market_data: Dict) -> Dict:
+        """
+        V6.5 is the COMPULSORY and ONLY system for determining profit targets.
+
+        This phase:
+        1. Reads TRADING_CONFIG from settings for baseline parameters
+        2. Computes dynamic daily/weekly/monthly/annual targets
+        3. Checks if daily target is already reached
+        4. Sets is_daily_target_triggered on DrawdownMonitor
+        5. Returns whether trading is allowed
+
+        All other systems (DailyTargetLock, RiskParameter hardcoded values)
+        MUST defer to V6.5's computed targets.
+        """
+        result = {
+            "available": False,
+            "trading_allowed": True,
+            "source": "V6.5_ORCHESTRATOR",
+        }
+
+        if not self.profit_target_manager:
+            result["error"] = "ProfitTargetManager not available"
+            result["trading_allowed"] = True  # Fail-open: allow trading if manager missing
+            return result
+
+        try:
+            # ── 1. Get TRADING_CONFIG from settings ───────────────────
+            trading_config = {}
+            try:
+                from django.conf import settings as django_settings
+                trading_config = getattr(django_settings, "TRADING_CONFIG", {})
+            except Exception:
+                pass
+
+            # ── 2. Get current account data ───────────────────────────
+            current_equity = self._get_account_balance()
+            peak_equity = current_equity  # Will be overridden by DrawdownMonitor
+            drawdown_pct = self._get_current_drawdown() * 100.0  # Convert to percentage
+
+            # Try to get peak equity from DrawdownMonitor
+            try:
+                from risk_management.models import DrawdownMonitor
+                monitor = DrawdownMonitor.objects.filter(user_id=1).first()
+                if monitor:
+                    peak_equity = float(monitor.peak_equity)
+                    drawdown_pct = float(monitor.drawdown_percent)
+            except Exception:
+                pass
+
+            # ── 3. Get recent trades for win rate calculation ──────────
+            recent_trades = []
+            try:
+                from trading.models import Trade
+                recent = Trade.objects.filter(
+                    status="CLOSED"
+                ).order_by("-closed_at")[:50]
+                recent_trades = [
+                    {"pnl": float(t.profit_loss or 0)}
+                    for t in recent
+                ]
+            except Exception:
+                pass
+
+            # ── 4. Get market regime from last cycle ───────────────────
+            regime = "NORMAL"
+            try:
+                # Try to get from the last AI analysis result
+                if hasattr(self, '_last_regime'):
+                    regime = self._last_regime
+            except Exception:
+                pass
+
+            # ── 5. Compute V6.5 dynamic targets ───────────────────────
+            targets = self.profit_target_manager.compute_targets(
+                current_equity=current_equity,
+                peak_equity=peak_equity,
+                recent_trades=recent_trades,
+                regime=regime,
+                v65_orchestrator=self,
+            )
+
+            result["available"] = True
+            result["targets"] = targets.get("targets", {})
+            result["inputs"] = targets.get("inputs", {})
+            result["profile"] = targets.get("profile", "moderate")
+
+            # ── 6. Check if daily target already reached ──────────────
+            daily_pnl_pct = 0.0
+            try:
+                from risk_management.models import DailyPerformance, DrawdownMonitor
+                from datetime import date as _date
+                daily = DailyPerformance.objects.filter(user_id=1, date=_date.today()).first()
+                monitor = DrawdownMonitor.objects.filter(user_id=1).first()
+                if daily:
+                    starting = float(daily.starting_equity) if daily.starting_equity else current_equity
+                    if starting > 0:
+                        daily_pnl_pct = (float(daily.daily_pnl) / starting) * 100.0
+                elif monitor:
+                    starting = float(monitor.starting_equity_today) if monitor.starting_equity_today else current_equity
+                    if starting > 0:
+                        daily_pnl_pct = (float(monitor.daily_pnl) / starting) * 100.0
+            except Exception:
+                pass
+
+            # ── 7. Enforce target on DrawdownMonitor ───────────────────
+            try:
+                from risk_management.models import DrawdownMonitor
+                monitor = DrawdownMonitor.objects.filter(user_id=1).first()
+                if monitor:
+                    enforcement = self.profit_target_manager.enforce_targets_on_drawdown_monitor(
+                        daily_pnl_pct=daily_pnl_pct,
+                        drawdown_monitor=monitor,
+                    )
+                    result["enforcement"] = enforcement
+                    if enforcement.get("action") == "halt":
+                        result["trading_allowed"] = False
+            except Exception as e:
+                logger.debug("DrawdownMonitor update failed: %s", e)
+
+            # ── 8. Cross-reference with TRADING_CONFIG ─────────────────
+            # V6.5 overrides any conflicting values in TRADING_CONFIG
+            if trading_config:
+                result["trading_config_override"] = {
+                    "old_annual_target": trading_config.get("TARGET_ANNUAL_GROWTH"),
+                    "new_annual_target": targets.get("targets", {}).get("annual_pct"),
+                    "source": "V6.5_DYNAMIC_OVERRIDE",
+                }
+
+            logger.info(
+                "Phase 16: V6.5 profit targets active — daily=%.4f%%, "
+                "trading_allowed=%s, pnl=%.4f%%",
+                targets.get("targets", {}).get("daily_pct", 0),
+                result["trading_allowed"],
+                daily_pnl_pct,
+            )
+
+        except Exception as e:
+            logger.error("Phase 16 profit target management failed: %s", e, exc_info=True)
+            result["error"] = str(e)
+            result["trading_allowed"] = True  # Fail-open
+
+        return result
 
     def _record_cycle(self, cycle_start: float, result: Dict):
         duration = (time.perf_counter() - cycle_start) * 1000

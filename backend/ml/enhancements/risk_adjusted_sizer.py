@@ -17,7 +17,7 @@ class RiskAdjustedSizer:
 
     def __init__(self):
         self.max_risk = 0.01
-        self.min_risk = 0.001
+        self.min_risk = 0.005
         self.default_risk = 0.005
         self.trade_history: List[Dict] = []
         self.max_loss_streak = 0

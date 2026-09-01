@@ -95,6 +95,12 @@ class OrderExecutionService:
         risk_pct = float(risk_params.max_position_size)
         max_risk_amount = equity * (risk_pct / 100)
         volume_f = float(volume)
+
+        # Minimum volume validation — reject sub-micro-lot orders
+        if volume_f < 0.01:
+            checks["position_size_ok"] = False
+            return False, f"Volume {volume_f} is below minimum lot size (0.01)", checks
+
         if volume_f * 100000 > max_risk_amount * 20:
             checks["position_size_ok"] = False
             return False, "Position size exceeds risk limit", checks

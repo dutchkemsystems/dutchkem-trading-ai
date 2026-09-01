@@ -517,8 +517,8 @@ class V6TradingOrchestrator:
             except Exception as e:
                 logger.error("Dynamic allocation failed: %s", e)
 
-        # --- Clamp to safe range [0.1%, 2%] ---
-        adjusted_size = max(0.001, min(0.02, adjusted_size))
+        # --- Clamp to safe range [1%, 2%] (min 0.01 lots) ---
+        adjusted_size = max(0.01, min(0.02, adjusted_size))
 
         result["adjusted_size"] = adjusted_size
         result["approved"] = True  # All risk checks passed
