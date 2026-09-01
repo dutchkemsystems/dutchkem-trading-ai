@@ -1,9 +1,0 @@
-{"ts":"2026-08-27T23:26:51.837Z","id":"deps","status":"not_applicable","required":false,"detail":"sem package.json"}
-{"ts":"2026-08-27T23:26:51.876Z","id":"lint","status":"not_applicable","required":false,"detail":"sem script lint"}
-{"ts":"2026-08-27T23:26:51.939Z","id":"typecheck","status":"not_applicable","required":false,"detail":"sem script typecheck"}
-{"ts":"2026-08-27T23:26:51.961Z","id":"test","status":"not_applicable","required":false,"detail":"sem suíte de testes"}
-{"ts":"2026-08-27T23:26:51.982Z","id":"build","status":"not_applicable","required":false,"detail":"sem script build"}
-{"ts":"2026-08-27T23:29:58.897Z","id":"qg-l1","status":"timed_out","required":true,"command":"python C:\\Users\\Lenovo\\.gstack\\hooks\\qg.py --path . --level 1","detail":"timeout: python C:\\Users\\Lenovo\\.gstack\\hooks\\qg.py --path . --level 1","durationMs":186820}
-{"ts":"2026-08-27T23:33:22.031Z","id":"qg-l2","status":"timed_out","required":true,"command":"python C:\\Users\\Lenovo\\.gstack\\hooks\\qg.py --path . --level 2","detail":"timeout: python C:\\Users\\Lenovo\\.gstack\\hooks\\qg.py --path . --level 2","durationMs":202972}
-{"ts":"2026-08-27T23:33:22.120Z","id":"runtime:start","status":"pending_feature","productCritical":false,"detail":"sem .gstack/runtime.json — `gstack_vibehard create` declara o runtime"}
-{"ts":"2026-08-27T23:33:22.147Z","id":"preview:open","status":"pending_feature","productCritical":false}

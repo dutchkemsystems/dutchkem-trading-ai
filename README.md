@@ -1,101 +1,98 @@
-# Dutchkem Fortress Suite
+# Dutchkem Trading AI
 
-**Multi-layered, monetized SaaS platform for Africa and the global diaspora.**
+**AI-powered forex trading system with MetaTrader 5 integration, signal generation, backtesting, and risk management.**
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    ADMIN DASHBOARD (React)                       │
-│              Real-time metrics, wallet, agents                   │
+│                      DJANGO REST API                            │
+│           /api/* — trading signals, backtesting, analytics      │
+├─────────┬─────────┬─────────┬─────────┬─────────────────────────┤
+│ SIGNALS │  ML     │ RISK    │MARKET   │   STRATEGIES            │
+│ ENGINE  │ MODELS  │MANAGER  │DATA     │   (Gold Edge, etc.)     │
+├─────────┴─────────┴─────────┴─────────┴─────────────────────────┤
+│                    CELERY WORKERS                                │
+│         market data ingestion, signal generation, backtesting    │
 ├─────────────────────────────────────────────────────────────────┤
-│                     FASTAPI API GATEWAY                          │
-│              /api/v1/* — REST endpoints                         │
-├─────────┬─────────┬─────────┬─────────┬─────────┬───────────────┤
-│ PILLAR 1│ PILLAR 2│ PILLAR 3│ PILLAR 4│ PILLAR 5│   PILLAR 0    │
-│Afro-Pay │Sentinel │ Agent   │NetraID  │TrustNode│  Agentic Fuel │
-│(Remit)  │ (SOC)   │ Cloud   │(ID)     │ (AI)    │  (Billing)    │
-├─────────┴─────────┴─────────┴─────────┴─────────┴───────────────┤
-│                     CELERY WORKERS                               │
-│         metering, billing, topup, fraud detection                │
-├─────────────────────────────────────────────────────────────────┤
-│   PostgreSQL    │    Redis    │  Paystack/Flutterwave/Stripe     │
-│  (16 tables)    │  (cache)    │  (payment integrations)          │
+│   PostgreSQL    │    Redis    │  MetaTrader 5 Bridge            │
+│  (trading data) │  (cache)    │  (MT5_HOST:MT5_PORT)            │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Tech Stack
 
-- **Backend:** Python 3.12+, FastAPI, Celery, Redis
-- **Database:** PostgreSQL 16 with 16 tables
-- **Frontend:** React 18, Tailwind CSS, Vite
-- **Infrastructure:** Kubernetes, Terraform, Docker
-- **Deployment:** AWS Cape Town (Africa), AWS Frankfurt (Europe)
-- **Security:** Zero-Trust, OWASP Top 10 compliance
+- **Backend:** Python 3.12+, Django, Django REST Framework
+- **Database:** PostgreSQL 16 (SQLite for local dev)
+- **Task Queue:** Celery + Redis
+- **Trading:** MetaTrader 5 integration
+- **ML:** Scikit-learn, LSTM models
+- **Deployment:** Docker, Render, Fly.io, Railway
 
 ## Quick Start
 
 ```bash
-# Clone and install
+# Clone and setup
 git clone <repo>
-cd dutchkem-fortress-suite
+cd dutchkem-trading-ai
 
-# Backend
-cd backend
-python -m venv venv
-source venv/bin/activate
-pip install -e ".[dev]"
+# Local dev (SQLite)
+cp .env.example .env
+python manage.py migrate
+python manage.py createsuperuser
+python manage.py runserver
 
-# Start services
+# Docker (PostgreSQL + Redis)
 docker-compose up -d
-
-# Run migrations
-alembic upgrade head
-
-# Start API
-uvicorn app.main:app --reload
-
-# Frontend
-cd frontend
-npm install
-npm run dev
+python manage.py migrate
+python manage.py runserver
 ```
 
 ## Project Structure
 
 ```
-dutchkem-fortress-suite/
+dutchkem-trading-ai/
 ├── backend/
-│   ├── app/
-│   │   ├── api/v1/routers/    # 7 API routers
-│   │   ├── core/              # Config, DB, security
-│   │   ├── integrations/      # Paystack, Flutterwave, Stripe
-│   │   ├── models/            # 16 SQLAlchemy models
-│   │   ├── services/          # Billing, metering, FX
-│   │   └── workers/           # Celery tasks
-│   └── alembic/               # DB migrations
-├── frontend/
-│   └── src/
-│       ├── components/        # Layout, shared components
-│       ├── pages/             # Dashboard, Wallet, Agents, etc.
-│       └── lib/               # API client
-├── k8s/                       # Kubernetes manifests
-│   ├── base/                  # Core deployments
-│   └── overlays/              # Africa + Europe regions
-├── infra/terraform/           # AWS infrastructure
-└── docs/                      # Investor deck, guides
+│   ├── accounts/          # User management
+│   ├── analytics/         # Performance analytics
+│   ├── backtesting/       # Strategy backtesting engine
+│   ├── expert_advisors/   # MT5 EA integration
+│   ├── gold_edge/         # Gold trading strategy
+│   ├── indicators/        # Technical indicators
+│   ├── market_data/       # Price data ingestion
+│   ├── ml/                # LSTM, regime detection
+│   ├── risk_management/   # Position sizing, drawdown
+│   ├── scalping/          # Scalping strategies
+│   ├── signals/           # Trade signal generation
+│   ├── strategies/        # Strategy framework
+│   └── trading/           # Core trading engine
+├── config/                # Django settings
+├── strategies/            # External strategy definitions
+├── scripts/               # Deployment scripts
+├── fly.toml               # Fly.io config
+├── render.yaml            # Render config
+└── railway.json           # Railway config
 ```
 
-## Pillars
+## Environment Variables
 
-| # | Name | Description | Revenue Model |
-|---|------|-------------|---------------|
-| 0 | Agentic Fuel | Credit billing engine (1 Credit = $0.10 USD) | Platform-wide metering |
-| 1 | Afro-Pay | Web3 remittance & fintech | 0.5% settlement fee |
-| 2 | Sentinel Africa | SOC-as-a-Service | $500/mo per threat |
-| 3 | Agent Cloud | Vertical AI workforce | $1.50–$2.00/task |
-| 4 | NetraID | Digital identity & compliance | Per-verification fee |
-| 5 | TrustNode | AI abstraction layer | Token-based metering |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SECRET_KEY` | - | Django secret key |
+| `DEBUG` | `0` | Debug mode (1=on, 0=off) |
+| `DATABASE_URL` | `sqlite:///db.sqlite3` | PostgreSQL connection |
+| `REDIS_URL` | `redis://localhost:6379/0` | Redis connection |
+| `MT5_HOST` | `localhost` | MetaTrader 5 bridge host |
+| `MT5_PORT` | `8082` | MetaTrader 5 REST port |
+| `MT5_WS_PORT` | `8081` | MetaTrader 5 WebSocket port |
+| `USE_SQLITE` | `1` | Use SQLite instead of PostgreSQL |
+
+## Deployment
+
+See deployment guides:
+- [Render](RENDER_DEPLOY.md)
+- [Railway](RAILWAY_DEPLOY.md)
+- [Fly.io](deploy-fly.ps1)
 
 ## License
 

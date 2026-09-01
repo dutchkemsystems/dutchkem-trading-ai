@@ -1,5 +1,31 @@
 services:
-  api:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: dutchkem
+      POSTGRES_PASSWORD: fortress
+      POSTGRES_DB: dutchkem_trading
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dutchkem -d dutchkem_trading"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  django:
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -18,7 +44,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: celery -A app.workers.celery_app worker -l info -Q metering,billing,topup,fraud
+    command: celery -A config.celery_app worker -l info -Q default,market_data,trading,signals,backtesting
     env_file: .env
     depends_on:
       db:
@@ -32,46 +58,11 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: celery -A app.workers.celery_app beat -l info
+    command: celery -A config.celery_app beat -l info
     env_file: .env
     depends_on:
       redis:
         condition: service_healthy
-
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: dutchkem
-      POSTGRES_PASSWORD: fortress
-      POSTGRES_DB: dutchkem_fortress
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dutchkem -d dutchkem_fortress"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
-    depends_on:
-      - api
 
 volumes:
   pgdata:

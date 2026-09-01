@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: dutchkem-trading-ai
+    runtime: python
+    plan: free
+    buildCommand: cd backend && pip install -r requirements.txt && python manage.py collectstatic --no-input
+    startCommand: cd backend && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings_production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: dutchkem-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: dutchkem-redis
+          property: connectionString
+      - key: ALLOWED_HOSTS
+        value: dutchkem-trading-ai.onrender.com
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://dutchkem-trading-ai-frontend.onrender.com
+      - key: SECURE_SSL_REDIRECT
+        value: "True"
+      - key: SESSION_COOKIE_SECURE
+        value: "True"
+      - key: CSRF_COOKIE_SECURE
+        value: "True"
+    healthCheckPath: /health/
+    autoDeploy: true
+
+databases:
+  - name: dutchkem-db
+    plan: free
+    databaseName: dutchkem_trading
+    ipAllowList: []
+
+  - name: dutchkem-redis
+    plan: free
+    ipAllowList: []

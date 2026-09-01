@@ -1,0 +1,252 @@
+[
+  {
+    "name": "German Prelim CPI m/m",
+    "country": "EUR",
+    "impact": "MEDIUM",
+    "time": "2026-08-31T02:29:00-04:00",
+    "forecast": "0.3%",
+    "previous": "0.8%",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "Core CPI Flash Estimate y/y",
+    "country": "EUR",
+    "impact": "MEDIUM",
+    "time": "2026-09-01T05:00:00-04:00",
+    "forecast": "2.5%",
+    "previous": "2.5%",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "CPI Flash Estimate y/y",
+    "country": "EUR",
+    "impact": "MEDIUM",
+    "time": "2026-09-01T05:00:00-04:00",
+    "forecast": "3.3%",
+    "previous": "2.9%",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "ISM Manufacturing PMI",
+    "country": "USD",
+    "impact": "HIGH",
+    "time": "2026-09-01T10:00:00-04:00",
+    "forecast": "55.2",
+    "previous": "55.6",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "ISM Manufacturing Prices",
+    "country": "USD",
+    "impact": "MEDIUM",
+    "time": "2026-09-01T10:00:00-04:00",
+    "forecast": "70.5",
+    "previous": "71.1",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "JOLTS Job Openings",
+    "country": "USD",
+    "impact": "MEDIUM",
+    "time": "2026-09-01T10:00:00-04:00",
+    "forecast": "7.33M",
+    "previous": "7.36M",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "GDP q/q",
+    "country": "AUD",
+    "impact": "HIGH",
+    "time": "2026-09-01T21:30:00-04:00",
+    "forecast": "0.3%",
+    "previous": "0.3%",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "Official Cash Rate",
+    "country": "NZD",
+    "impact": "HIGH",
+    "time": "2026-09-01T22:00:00-04:00",
+    "forecast": "2.75%",
+    "previous": "2.50%",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "RBNZ Monetary Policy Statement",
+    "country": "NZD",
+    "impact": "HIGH",
+    "time": "2026-09-01T22:00:00-04:00",
+    "forecast": "",
+    "previous": "",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "RBNZ Rate Statement",
+    "country": "NZD",
+    "impact": "HIGH",
+    "time": "2026-09-01T22:00:00-04:00",
+    "forecast": "",
+    "previous": "",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "RBNZ Press Conference",
+    "country": "NZD",
+    "impact": "HIGH",
+    "time": "2026-09-01T23:00:00-04:00",
+    "forecast": "",
+    "previous": "",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "ADP Non-Farm Employment Change",
+    "country": "USD",
+    "impact": "MEDIUM",
+    "time": "2026-09-02T08:15:00-04:00",
+    "forecast": "48K",
+    "previous": "44K",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "BOC Rate Statement",
+    "country": "CAD",
+    "impact": "HIGH",
+    "time": "2026-09-02T09:45:00-04:00",
+    "forecast": "",
+    "previous": "",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "Overnight Rate",
+    "country": "CAD",
+    "impact": "HIGH",
+    "time": "2026-09-02T09:45:00-04:00",
+    "forecast": "2.25%",
+    "previous": "2.25%",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "BOC Press Conference",
+    "country": "CAD",
+    "impact": "HIGH",
+    "time": "2026-09-02T10:30:00-04:00",
+    "forecast": "",
+    "previous": "",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "CPI m/m",
+    "country": "CHF",
+    "impact": "MEDIUM",
+    "time": "2026-09-03T02:30:00-04:00",
+    "forecast": "0.0%",
+    "previous": "-0.1%",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "Unemployment Claims",
+    "country": "USD",
+    "impact": "MEDIUM",
+    "time": "2026-09-03T08:30:00-04:00",
+    "forecast": "205K",
+    "previous": "203K",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "ISM Services PMI",
+    "country": "USD",
+    "impact": "MEDIUM",
+    "time": "2026-09-03T10:00:00-04:00",
+    "forecast": "54.2",
+    "previous": "54.1",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "BOE Gov Bailey Speaks",
+    "country": "GBP",
+    "impact": "HIGH",
+    "time": "2026-09-04T04:50:00-04:00",
+    "forecast": "",
+    "previous": "",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "Employment Change",
+    "country": "CAD",
+    "impact": "HIGH",
+    "time": "2026-09-04T08:30:00-04:00",
+    "forecast": "15.1K",
+    "previous": "75.1K",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "Unemployment Rate",
+    "country": "CAD",
+    "impact": "HIGH",
+    "time": "2026-09-04T08:30:00-04:00",
+    "forecast": "6.4%",
+    "previous": "6.4%",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "Average Hourly Earnings m/m",
+    "country": "USD",
+    "impact": "HIGH",
+    "time": "2026-09-04T08:30:00-04:00",
+    "forecast": "0.3%",
+    "previous": "0.1%",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "Non-Farm Employment Change",
+    "country": "USD",
+    "impact": "HIGH",
+    "time": "2026-09-04T08:30:00-04:00",
+    "forecast": "55K",
+    "previous": "-23K",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "Unemployment Rate",
+    "country": "USD",
+    "impact": "HIGH",
+    "time": "2026-09-04T08:30:00-04:00",
+    "forecast": "4.1%",
+    "previous": "4.1%",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  },
+  {
+    "name": "Ivey PMI",
+    "country": "CAD",
+    "impact": "MEDIUM",
+    "time": "2026-09-04T10:00:00-04:00",
+    "forecast": "56.2",
+    "previous": "55.1",
+    "actual": null,
+    "_cached_date": "2026-08-31"
+  }
+]
