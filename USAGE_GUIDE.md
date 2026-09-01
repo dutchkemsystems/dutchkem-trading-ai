@@ -1,341 +1,593 @@
-# =============================================================================
-# Dutchkem Trading AI — Complete Usage Guide
-# =============================================================================
-# Version: 1.0 | Updated: 2026-09-01
-# MT5 Account: 161704951 | Server: Exness-MT5Real21
-# =============================================================================
+# DutchKEM Trading AI — Complete Usage Guide
 
-## Table of Contents
-
-1. [Local Production Setup](#1-local-production-setup)
-2. [Cloud Deployment on Render](#2-cloud-deployment-on-render)
-3. [Trading Operations](#3-trading-operations)
-4. [Monitoring & Administration](#4-monitoring--administration)
-5. [Troubleshooting](#5-troubleshooting)
+> **Generated:** September 1, 2026  
+> **MT5 Account:** 161704951 | **Server:** Exness-MT5Real21  
+> **Trading Mode:** FULL (Automatic)
 
 ---
 
-## 1. Local Production Setup
+## Table of Contents
 
-### Prerequisites
+1. [System Overview](#1-system-overview)
+2. [Prerequisites](#2-prerequisites)
+3. [Docker Desktop Installation](#3-docker-desktop-installation)
+4. [Local Production Setup](#4-local-production-setup)
+5. [Render Cloud Deployment](#5-render-cloud-deployment)
+6. [Trading Operations](#6-trading-operations)
+7. [Monitoring & Dashboard](#7-monitoring--dashboard)
+8. [Troubleshooting](#8-troubleshooting)
 
-- **Docker Desktop** (required for PostgreSQL, Redis, and MT5 Bridge)
-- **Python 3.12+** (for local Django development without Docker)
-- **MT5 Terminal** running on Windows with Exness-MT5Real21 server
+---
 
-### Step 1: Install Docker Desktop
+## 1. System Overview
 
-Since Docker is not currently installed, follow these steps:
+DutchKEM Trading AI is an automated forex/gold trading system with:
 
-#### Download Docker Desktop
-1. Visit: https://www.docker.com/products/docker-desktop/
+- **MT5 Bridge:** Connects to MetaTrader 5 via SYNX-MT5-MCP
+- **Django Backend:** REST API, user management, trade execution
+- **Celery Workers:** Background tasks for trading cycles, signals, risk monitoring
+- **Celery Beat:** Scheduled tasks (trading cycle every 60 seconds)
+- **PostgreSQL:** Production database
+- **Redis:** Task queue and caching
+
+### Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    DUTCHKEM TRADING AI                       │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌──────────┐    ┌──────────┐    ┌──────────┐               │
+│  │ Frontend │───▶│  Django  │───▶│ Celery   │               │
+│  │ (React)  │    │ Backend  │    │ Worker   │               │
+│  └──────────┘    └──────────┘    └──────────┘               │
+│                       │                  │                   │
+│                       ▼                  ▼                   │
+│                ┌──────────┐      ┌──────────┐               │
+│                │PostgreSQL│      │  Redis   │               │
+│                └──────────┘      └──────────┘               │
+│                       │                  │                   │
+│                       ▼                  ▼                   │
+│                ┌─────────────────────────────┐               │
+│                │      MT5 Bridge (Docker)    │               │
+│                └─────────────────────────────┘               │
+│                              │                              │
+│                              ▼                              │
+│                ┌─────────────────────────────┐               │
+│                │   MetaTrader 5 Terminal     │               │
+│                │   (Exness-MT5Real21)       │               │
+│                └─────────────────────────────┘               │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Active Trading Symbols
+
+- EURUSD (Euro/US Dollar)
+- GBPUSD (British Pound/US Dollar)
+- USDJPY (US Dollar/Japanese Yen)
+- AUDUSD (Australian Dollar/US Dollar)
+- XAUUSD (Gold/US Dollar)
+
+### Automated Trading Pipeline (V6.5)
+
+Every 60 seconds, the system runs:
+
+```
+Scan Market → AI Analysis → Sentiment → News → Order Flow → Pattern Recognition →
+Multi-Timeframe Analysis → Signal Generation → Risk Management →
+Stop Loss/Take Profit → Diversification → Trade Execution → Learning
+```
+
+---
+
+## 2. Prerequisites
+
+- [x] Windows 10/11 with WSL2 support
+- [x] Docker Desktop (to be installed — see Section 3)
+- [x] MetaTrader 5 terminal installed and logged in
+- [x] Render account (for cloud deployment)
+- [x] Git installed
+- [x] Python 3.12+ (for local dev without Docker)
+
+---
+
+## 3. Docker Desktop Installation
+
+Since Docker is not installed on your system, follow these steps:
+
+### Step 3.1: Download Docker Desktop
+
+1. Go to: https://www.docker.com/products/docker-desktop/
 2. Click **"Download for Windows"**
-3. Run the installer (`Docker Desktop Installer.exe`)
-4. Follow the installation wizard
-5. **Important**: Ensure "Use WSL 2 instead of Hyper-V" is checked during installation
+3. Save `Docker Desktop Installer.exe`
 
-#### Post-Installation Steps
-1. **Restart your computer** after installation
-2. Open Docker Desktop and wait for it to start (whale icon in system tray turns solid)
-3. Open a new terminal and verify Docker is running:
-   ```bash
+### Step 3.2: Install Docker Desktop
+
+1. Run the downloaded installer
+2. Ensure **"Use WSL 2 instead of Hyper-V"** is checked
+3. Click **OK** and wait for installation
+4. When prompted, **restart your computer**
+
+### Step 3.3: Post-Installation Setup
+
+After restart:
+
+1. Launch Docker Desktop from Start Menu
+2. Wait for Docker Engine to start (green icon in system tray)
+3. Open PowerShell and verify:
+   ```powershell
    docker --version
    docker compose version
    ```
 
-#### Enable WSL2 (if not already enabled)
+### Step 3.4: Enable WSL2 (if not already enabled)
+
+Open PowerShell as Administrator:
 ```powershell
-# Run in PowerShell as Administrator
 wsl --install
-# Restart computer
 wsl --set-default-version 2
 ```
 
-### Step 2: Start All Services
+Restart if prompted.
 
-```bash
-# Navigate to project directory
-cd C:\DUTCHKEM-TRADING-AI
+### Step 3.5: Allocate Resources
 
-# Start the full stack (PostgreSQL, Redis, MT5 Bridge, Django, Celery)
+In Docker Desktop:
+1. Go to **Settings** (gear icon)
+2. **Resources** → **Advanced**
+3. Set:
+   - CPUs: 4 (or half your cores)
+   - Memory: 8 GB (or half your RAM)
+   - Swap: 2 GB
+4. Click **Apply & Restart**
+
+---
+
+## 4. Local Production Setup
+
+### Step 4.1: Start MT5 Terminal
+
+1. Open MetaTrader 5
+2. Login with:
+   - **Login:** 161704951
+   - **Password:** Christ@5436
+   - **Server:** Exness-MT5Real21
+3. Ensure **"Allow Algo Trading"** is enabled (Tools → Options → Expert Advisors)
+4. Keep MT5 running in the background
+
+### Step 4.2: Start All Services
+
+Open PowerShell in the project directory and run:
+
+```powershell
+# Start PostgreSQL, Redis, MT5 Bridge, Django, Celery Worker, Celery Beat
 docker compose -f docker-compose.full.yml up -d
+```
 
-# Check all services are running
+This will:
+- Start PostgreSQL on port 5432
+- Start Redis on port 6379
+- Start MT5 Bridge on ports 8082 (REST) and 8081 (WebSocket)
+- Start Django on port 8000
+- Start Celery Worker
+- Start Celery Beat (scheduler)
+
+### Step 4.3: Verify Services
+
+```powershell
+# Check all containers are running
 docker compose -f docker-compose.full.yml ps
+
+# Check Django health
+curl http://localhost:8000/health/
+
+# Check MT5 Bridge health
+curl http://localhost:8082/health
 ```
 
-### Step 3: Create Database & Superuser
+### Step 4.4: Create Admin User
 
-```bash
-# Wait for PostgreSQL to be healthy (check with: docker compose -f docker-compose.full.yml ps)
+```powershell
+# Access Django shell inside the container
+docker compose -f docker-compose.full.yml exec django python manage.py createsuperuser
 
-# Run migrations
+# Enter username, email, and password when prompted
+```
+
+### Step 4.5: Run Database Migrations
+
+```powershell
 docker compose -f docker-compose.full.yml exec django python manage.py migrate --no-input
-
-# Create superuser for admin access
-docker compose -f docker-compose.full.yml exec django python manage.py createsuperuser --username admin --email admin@dutchkem.com
 ```
 
-### Step 4: Verify Local Deployment
+### Step 4.6: Access the System
 
-| Service | URL | Status Check |
-|---------|-----|--------------|
-| Django Backend | http://localhost:8000 | http://localhost:8000/health/ |
-| MT5 Bridge REST | http://localhost:8082 | http://localhost:8082/health |
-| MT5 Bridge WebSocket | ws://localhost:8081 | Connection test |
-| Admin Panel | http://localhost:8000/admin | Login with superuser |
-| API Docs | http://localhost:8000/swagger | Swagger UI |
+| Service | URL |
+|---------|-----|
+| Django Backend | http://localhost:8000 |
+| Admin Panel | http://localhost:8000/admin/ |
+| API Docs | http://localhost:8000/api/docs/ |
+| MT5 Bridge REST | http://localhost:8082 |
+| MT5 Bridge WebSocket | ws://localhost:8081 |
 
-### Step 5: Start Automatic Trading
+### Step 4.7: View Logs
 
-Trading starts automatically when `TRADING_MODE=full` is set in `.env` and Celery Beat is running.
+```powershell
+# All services
+docker compose -f docker-compose.full.yml logs -f
 
-```bash
-# Verify trading is active
-docker compose -f docker-compose.full.yml logs celery-beat | grep "run-v6-trading-cycle"
-
-# Check trading logs
-docker compose -f docker-compose.full.yml logs celery-worker | tail -50
+# Specific service
+docker compose -f docker-compose.full.yml logs -f django
+docker compose -f docker-compose.full.yml logs -f celery-worker
+docker compose -f docker-compose.full.yml logs -f mt5-bridge
 ```
 
 ---
 
-## 2. Cloud Deployment on Render
+## 5. Render Cloud Deployment
 
-### Prerequisites
-- GitHub repository pushed to `dutchkemsystems/dutchkem-trading-ai`
-- Render account (https://dashboard.render.com)
-- Exness MT5 terminal running on your local machine (for MT5 bridge connection)
+### Step 5.1: Push to GitHub
 
-### Step 1: Push to GitHub
-
-```bash
-cd C:\DUTCHKEM-TRADING-AI
+```powershell
 git add .
-git commit -m "Configure production environment and render.yaml"
+git commit -m "feat: production deployment with MT5 credentials"
 git push origin main
 ```
 
-### Step 2: Deploy on Render
+### Step 5.2: Deploy via Render Blueprint
 
-1. **Log in** to https://dashboard.render.com
-2. Click **"New +"** → **"Blueprint"** (this uses `render.yaml` automatically)
-3. Select your repository: `dutchkemsystems/dutchkem-trading-ai`
-4. Render will create:
-   - PostgreSQL database (`dutchkem-db`)
-   - Redis instance (`dutchkem-redis`)
-   - Django web service (`dutchkem-trading-ai`)
-   - Celery worker (`dutchkem-celery-worker`)
-   - Celery beat (`dutchkem-celery-beat`)
+1. Go to https://dashboard.render.com
+2. Click **"New +"** → **"Blueprint"**
+3. Connect your GitHub repository: `dutchkemsystems/dutchkem-trading-ai`
+4. Render will detect `render.yaml` and create:
+   - Web service (Django)
+   - Celery Worker
+   - Celery Beat
+   - PostgreSQL database
+5. Click **"Apply"**
 
-### Step 3: Set Manual Environment Variables (sync: false)
+### Step 5.3: Set Manual Environment Variables
 
-After deployment, go to each service's **Environment** tab and set these variables manually:
+In Render Dashboard, for each service, set these variables manually:
 
-#### For Django Web Service, Celery Worker, and Celery Beat:
+| Variable | Value | Notes |
+|----------|-------|-------|
+| `REDIS_URL` | (from Render Redis) | Create Redis in Dashboard first |
+| `CELERY_BROKER_URL` | (same as REDIS_URL) | Same Redis, different DB index |
+| `MT5_HOST` | (your bridge URL) | See Section 5.5 |
+| `CLOUDINARY_URL` | (if using) | Optional media storage |
 
-| Variable | Value |
-|----------|-------|
-| `REDIS_URL` | *(from Render Redis dashboard → Internal URL)* |
-| `CELERY_BROKER_URL` | *(same Redis URL)* |
-| `MT5_HOST` | Your MT5 bridge hostname (see Step 4) |
-| `MT5_LOGIN` | `161704951` |
-| `MT5_PASSWORD` | `Christ@5436` |
-| `MT5_SERVER` | `Exness-MT5Real21` |
+### Step 5.4: Create Redis in Render
 
-### Step 4: Configure MT5 Bridge for Cloud
+1. In Render Dashboard: **"New +"** → **"Redis"**
+2. Name: `dutchkem-redis`
+3. Plan: Free
+4. Copy the **Internal URL**
+5. Set as `REDIS_URL` and `CELERY_BROKER_URL` in all 3 services
 
-For Render cloud deployment, your MT5 terminal must be accessible remotely. Options:
+### Step 5.5: MT5 Bridge for Cloud (Important!)
+
+For cloud deployment, you need a way to expose your local MT5 terminal to Render. Options:
 
 #### Option A: Cloudflare Tunnel (Recommended)
-1. Install Cloudflare Tunnel: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
-2. Run the tunnel exposing port 1929:
-   ```bash
-   cloudflared tunnel --url tcp://localhost:1929
-   ```
-3. Set `MT5_HOST` in Render to the tunnel URL
 
-#### Option B: ngrok
-1. Install ngrok: https://ngrok.com/
+```powershell
+# Install cloudflared
+winget install Cloudflare.cloudflared
+
+# Login
+cloudflared tunnel login
+
+# Create tunnel
+cloudflared tunnel create dutchkem-mt5
+
+# Configure (add to ~/.cloudflared/config.yml)
+tunnel: <tunnel-id>
+credentials-file: C:\Users\<you>\.cloudflared\<tunnel-id>.json
+ingress:
+  - hostname: mt5.dutchkem.com
+    service: http://localhost:8082
+  - service: http_status:404
+
+# Route DNS
+cloudflared tunnel route dns dutchkem-mt5 mt5.dutchkem.com
+
+# Run tunnel
+cloudflared tunnel run dutchkem-mt5
+```
+
+Then set in Render:
+- `MT5_HOST=mt5.dutchkem.com`
+- `MT5_PORT=443`
+- `MT5_WS_PORT=443`
+
+#### Option B: Leave MT5 Host Empty (Partial Functionality)
+
+If you don't set up a tunnel, the system will run but won't be able to execute real trades. It will still generate signals and calculate indicators.
+
+### Step 5.6: Run Migrations on Render
+
+After deployment:
+1. Go to your web service → **"Shell"** tab
 2. Run:
-   ```bash
-   ngrok tcp 1929
-   ```
-3. Set `MT5_HOST` in Render to the ngrok TCP address
+```bash
+python manage.py migrate --no-input
+python manage.py createsuperuser
+```
 
-#### Option C: Public IP
-1. Configure your router to forward port 1929 to your machine
-2. Set `MT5_HOST` to your public IP address
-
-### Step 5: Create Superuser on Render
-
-1. Go to your Django web service → **Shell** tab
-2. Run:
-   ```bash
-   python manage.py createsuperuser --username admin --email admin@dutchkem.com
-   ```
-
-### Step 6: Verify Cloud Deployment
+### Step 5.7: Verify Deployment
 
 | Service | URL |
 |---------|-----|
 | Backend API | https://dutchkem-trading-ai.onrender.com |
 | Admin Panel | https://dutchkem-trading-ai.onrender.com/admin/ |
-| Swagger Docs | https://dutchkem-trading-ai.onrender.com/swagger/ |
+| API Docs | https://dutchkem-trading-ai.onrender.com/api/docs/ |
 | Health Check | https://dutchkem-trading-ai.onrender.com/health/ |
 
+### Step 5.8: Free Tier Limits
+
+- **750 hours/month** (spins down after 15min inactivity)
+- **512 MB RAM** per service
+- **PostgreSQL free for 90 days**, then $7/month
+- **Redis free tier available**
+- Automatic SSL certificates
+
 ---
 
-## 3. Trading Operations
+## 6. Trading Operations
 
-### How Auto-Trading Works
+### 6.1: How Auto-Trading Works
 
-The trading pipeline runs automatically via Celery Beat scheduler:
+The system uses **TRADING_MODE=full** which means:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    AUTOMATIC TRADING PIPELINE                    │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  Every 60 seconds (run-v6-trading-cycle):                       │
-│  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐       │
-│  │ Market Data  │──▶│   Signals    │──▶│   Execute    │       │
-│  │  Ingestion   │   │  Generation  │   │   Trades     │       │
-│  └──────────────┘   └──────────────┘   └──────────────┘       │
-│         │                  │                  │                  │
-│         ▼                  ▼                  ▼                  │
-│  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐       │
-│  │  Indicator   │   │    Risk      │   │    MT5       │       │
-│  │ Calculation  │   │  Management  │   │   Bridge     │       │
-│  └──────────────┘   └──────────────┘   └──────────────┘       │
-│                                                                  │
-│  Active Symbols: EURUSD, GBPUSD, USDJPY, AUDUSD, XAUUSD        │
-│  Timeframes: M5, M15, M30, H1, H2, H4                          │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
+1. **Every 60 seconds**, `run_v6_trading_cycle` task executes:
+   - Fetches live market data from MT5 for all 5 symbols
+   - Runs AI analysis (V6.5 orchestrator with 10 enhancements)
+   - Generates multi-timeframe signals (M5, M15, M30, H1, H2, H4)
+   - Calculates confluence scores
+   - Applies risk management rules
+   - Executes trades automatically if criteria are met
 
-### Trading Modes
+2. **Every 15 minutes**, signal generation tasks run for each symbol
 
-| Mode | Description | Use Case |
-|------|-------------|----------|
-| `full` | Fully automatic trading | Production (current setting) |
-| `semi` | Auto signals, manual execution | Testing/learning |
-| `manual` | Signals only, no execution | Analysis only |
-| `off` | Trading disabled | Maintenance |
+3. **Every 5 minutes**, MT5 data sync and indicator calculations
 
-### Start Automatic Trading
+4. **Every minute**, drawdown monitoring and performance calculation
 
-Trading starts automatically when the system is running with `TRADING_MODE=full`.
+5. **Daily at 03:00 UTC**, V6.5 self-optimization runs
 
-**Verify trading is active:**
-```bash
-# Check Celery Beat is scheduling trading cycles
-docker compose -f docker-compose.full.yml logs celery-beat --tail=20
+### 6.2: Start Automatic Trading
 
-# Check Celery Worker is executing trades
-docker compose -f docker-compose.full.yml logs celery-worker --tail=50
+Trading starts automatically when all services are running. To verify:
 
-# Check MT5 Bridge connection
-curl http://localhost:8082/health
+```powershell
+# Check Celery Beat is scheduling tasks
+docker compose -f docker-compose.full.yml logs celery-beat | findstr "v6-trading-cycle"
+
+# Check Celery Worker is processing tasks
+docker compose -f docker-compose.full.yml logs celery-worker | findstr "V6 cycle"
 ```
 
-### Pause Trading
+### 6.3: Pause Trading
 
-To pause trading without stopping the system:
+To pause automatic trading without stopping the system:
 
-1. **Via Admin Panel:**
-   - Go to http://localhost:8000/admin (or Render URL)
-   - Navigate to **Django Celery Beat** → **Periodic Tasks**
-   - Find `run-v6-trading-cycle` and uncheck **Enabled**
-   - Save
+1. Access Django Admin: http://localhost:8000/admin/ (or Render URL)
+2. Go to **Django Celery Beat** → **Periodic Tasks**
+3. Find **"run-v6-trading-cycle"**
+4. Uncheck **"Enabled"**
+5. Save
 
-2. **Via Environment Variable:**
-   - Change `TRADING_MODE=off` in `.env`
-   - Restart services: `docker compose -f docker-compose.full.yml restart django celery-worker`
+To resume: Re-enable the task.
 
-### Stop Trading
+### 6.4: Stop Trading Completely
 
-To completely stop trading:
-
-```bash
-# Stop Celery Beat (stops all periodic tasks)
-docker compose -f docker-compose.full.yml stop celery-beat
-
-# Or stop the entire stack
+```powershell
+# Stop all services
 docker compose -f docker-compose.full.yml down
+
+# Or stop only the celery worker (keeps web accessible)
+docker compose -f docker-compose.full.yml stop celery-worker celery-beat
 ```
 
-### View Trade History
+### 6.5: Change Trading Mode
 
-1. **Admin Panel:** http://localhost:8000/admin/trading/
-2. **API Endpoint:** `GET /api/v1/trading/trades/`
-3. **Database Query:**
-   ```sql
-   SELECT * FROM trading_trade ORDER BY created_at DESC LIMIT 100;
-   ```
+Edit `.env`:
+```
+TRADING_MODE=semi    # Requires manual approval for each trade
+TRADING_MODE=manual  # No automatic trades
+TRADING_MODE=full    # Fully automatic
+```
+
+Then restart:
+```powershell
+docker compose -f docker-compose.full.yml restart django celery-worker celery-beat
+```
+
+### 6.6: View Trade History
+
+**Via Django Admin:**
+1. Go to http://localhost:8000/admin/ (or Render URL)
+2. Navigate to **Trading** → **Trades**
+3. Filter by status, symbol, date
+
+**Via API:**
+```powershell
+# Get auth token first
+curl -X POST http://localhost:8000/api/auth/token/ -d "username=admin&password=yourpassword"
+
+# Get trades
+curl -H "Authorization: Bearer <token>" http://localhost:8000/api/trades/
+```
+
+### 6.7: Check MT5 Connection Status
+
+**Via API:**
+```powershell
+curl http://localhost:8000/health/
+```
+
+**Via Bridge directly:**
+```powershell
+# REST API health
+curl http://localhost:8082/health
+
+# Account info
+curl http://localhost:8082/api/account
+
+# Open positions
+curl http://localhost:8082/api/positions
+```
 
 ---
 
-## 4. Monitoring & Administration
+## 7. Monitoring & Dashboard
 
-### Dashboard Access
+### 7.1: Real-Time Logs
 
-| Interface | URL | Description |
-|-----------|-----|-------------|
-| Django Admin | http://localhost:8000/admin | Full system management |
-| Swagger API | http://localhost:8000/swagger | Interactive API docs |
-| ReDoc | http://localhost:8000/redoc | API documentation |
-| Health Check | http://localhost:8000/health | System health status |
-| Metrics | http://localhost:8000/metrics | System metrics |
-
-### Check MT5 Connection Status
-
-```bash
-# Check MT5 Bridge health
-curl http://localhost:8082/health
-
-# Check MT5 Bridge logs
-docker compose -f docker-compose.full.yml logs mt5-bridge --tail=50
-
-# Verify MT5 credentials in logs
-docker compose -f docker-compose.full.yml logs mt5-bridge | grep -i "login\|connected"
-```
-
-### Monitor System Logs
-
-```bash
-# View all logs
+```powershell
+# Watch all services
 docker compose -f docker-compose.full.yml logs -f
 
-# View specific service logs
-docker compose -f docker-compose.full.yml logs -f celery-worker
-docker compose -f docker-compose.full.yml logs -f django
-docker compose -f docker-compose.full.yml logs -f celery-beat
+# Filter for trading activity
+docker compose -f docker-compose.full.yml logs -f celery-worker | findstr "V6 cycle"
 
-# View trading-specific logs
-docker compose -f docker-compose.full.yml logs celery-worker | grep -i "trade\|signal\|execute"
+# Filter for errors
+docker compose -f docker-compose.full.yml logs -f | findstr "ERROR"
 ```
 
-### Check Celery Task Status
+### 7.2: Celery Flower (Task Monitor)
 
-1. **Admin Panel:** http://localhost:8000/admin/django_celery_results/chordcounter/
-2. **Via Django Shell:**
-   ```bash
-   docker compose -f docker-compose.full.yml exec django python manage.py shell
-   
-   # Check active tasks
-   from celery import current_app
-   inspector = current_app.control.inspect()
-   print(inspector.active())
-   print(inspector.scheduled())
+Add to `docker-compose.full.yml`:
+```yaml
+  flower:
+    image: mher/flower:latest
+    container_name: dutchkem-flower
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/1
+    depends_on:
+      - redis
+```
+
+Access: http://localhost:5555
+
+### 7.3: Performance Metrics
+
+The system automatically calculates and caches:
+- Daily P&L
+- Win rate
+- Profit factor
+- Sharpe ratio
+- Maximum drawdown
+- Per-symbol performance
+
+Access via API: `/api/analytics/performance/`
+
+### 7.4: Risk Alerts
+
+The system monitors:
+- **Drawdown:** Alerts if equity drops below peak
+- **Daily loss:** Stops trading if daily loss exceeds 2%
+- **Position size:** Limits max position size to 2% of equity
+- **Correlation:** Prevents over-correlated positions
+
+### 7.5: Render Dashboard Monitoring
+
+On Render, you can:
+1. View **Logs** tab for each service
+2. Check **Metrics** tab for CPU/Memory usage
+3. Monitor **Events** tab for deployment history
+4. Set up **Notifications** for service alerts
+
+---
+
+## 8. Troubleshooting
+
+### 8.1: MT5 Bridge Not Connecting
+
+**Symptoms:** "MT5 connection failed" in logs
+
+**Solutions:**
+1. Ensure MT5 terminal is running and logged in
+2. Check MT5 → Tools → Options → Expert Advisors → "Allow Algo Trading" is enabled
+3. Verify the bridge container can reach the host:
+   ```powershell
+   docker compose -f docker-compose.full.yml exec mt5-bridge ping host.docker.internal
+   ```
+4. Check port 1929 is not blocked by firewall
+
+### 8.2: Celery Worker Not Starting
+
+**Symptoms:** Tasks not executing
+
+**Solutions:**
+1. Check Redis is running:
+   ```powershell
+   docker compose -f docker-compose.full.yml exec redis redis-cli ping
+   ```
+2. Verify `CELERY_BROKER_URL` is set correctly
+3. Check worker logs:
+   ```powershell
+   docker compose -f docker-compose.full.yml logs celery-worker
    ```
 
-### Database Management
+### 8.3: Database Connection Errors
 
-```bash
-# Access PostgreSQL
-docker compose -f docker-compose.full.yml exec db psql -U dutchkem -d dutchkem_trading
+**Solutions:**
+1. Verify PostgreSQL is healthy:
+   ```powershell
+   docker compose -f docker-compose.full.yml exec db pg_isready -U dutchkem
+   ```
+2. Run migrations:
+   ```powershell
+   docker compose -f docker-compose.full.yml exec django python manage.py migrate
+   ```
+
+### 8.4: Django 502 Errors on Render
+
+**Solutions:**
+1. Check if service is spinning down (free tier inactivity)
+2. Add a health check ping service
+3. Upgrade to paid tier for always-on
+
+### 8.5: Trades Not Executing
+
+**Checklist:**
+- [ ] MT5 terminal is running and logged in
+- [ ] Algo trading is enabled in MT5
+- [ ] MT5 Bridge container is healthy
+- [ ] Celery Worker is processing tasks
+- [ ] `TRADING_MODE=full` in `.env`
+- [ ] Confluence score meets threshold (usually > 0.7)
+- [ ] Risk limits not exceeded
+
+---
+
+## Quick Reference Commands
+
+```powershell
+# === LOCAL PRODUCTION ===
+
+# Start everything
+docker compose -f docker-compose.full.yml up -d
+
+# Stop everything
+docker compose -f docker-compose.full.yml down
+
+# Restart everything
+docker compose -f docker-compose.full.yml restart
+
+# View logs
+docker compose -f docker-compose.full.yml logs -f
+
+# Check status
+docker compose -f docker-compose.full.yml ps
+
+# Access Django shell
+docker compose -f docker-compose.full.yml exec django python manage.py shell
 
 # Run migrations
 docker compose -f docker-compose.full.yml exec django python manage.py migrate
@@ -343,111 +595,41 @@ docker compose -f docker-compose.full.yml exec django python manage.py migrate
 # Create superuser
 docker compose -f docker-compose.full.yml exec django python manage.py createsuperuser
 
-# Dump database
-docker compose -f docker-compose.full.yml exec db pg_dump -U dutchkem dutchkem_trading > backup.sql
-```
-
----
-
-## 5. Troubleshooting
-
-### Common Issues
-
-#### MT5 Bridge Not Connecting
-```bash
-# Check if MT5 terminal is running
-# Verify port 1929 is open
-netstat -an | findstr 1929
-
-# Check MT5 Bridge logs
-docker compose -f docker-compose.full.yml logs mt5-bridge
-
-# Restart MT5 Bridge
-docker compose -f docker-compose.full.yml restart mt5-bridge
-```
-
-#### Celery Worker Not Processing Tasks
-```bash
-# Check Redis connection
-docker compose -f docker-compose.full.yml exec redis redis-cli ping
-
-# Check Celery Worker status
-docker compose -f docker-compose.full.yml logs celery-worker --tail=20
-
-# Restart Celery Worker
-docker compose -f docker-compose.full.yml restart celery-worker
-```
-
-#### Database Connection Issues
-```bash
-# Check PostgreSQL is running
-docker compose -f docker-compose.full.yml ps db
-
-# Check database health
-docker compose -f docker-compose.full.yml exec db pg_isready -U dutchkem -d dutchkem_trading
-
-# Restart PostgreSQL
-docker compose -f docker-compose.full.yml restart db
-```
-
-#### Static Files Not Loading
-```bash
-# Rebuild and collect static files
+# Collect static files
 docker compose -f docker-compose.full.yml exec django python manage.py collectstatic --no-input
 
-# Rebuild Docker image
-docker compose -f docker-compose.full.yml build --no-cache django
-```
 
-### Emergency Stop
+# === RENDER CLOUD ===
 
-If trading is causing losses and you need to stop immediately:
+# Push changes
+git add . && git commit -m "update" && git push
 
-```bash
-# Option 1: Stop all services
-docker compose -f docker-compose.full.yml down
+# View Render logs (via dashboard or CLI)
+render logs -s dutchkem-trading-ai
 
-# Option 2: Stop only trading
-docker compose -f docker-compose.full.yml stop celery-beat celery-worker
-
-# Option 3: Disable trading via environment
-# Edit .env: TRADING_MODE=off
-# Then restart
-docker compose -f docker-compose.full.yml restart
+# Restart service on Render (via dashboard)
+# Go to Service → Manual Deploy → Clear build cache & deploy
 ```
 
 ---
 
-## Quick Reference Commands
+## Security Notes
 
-```bash
-# Start full stack
-docker compose -f docker-compose.full.yml up -d
-
-# Stop full stack
-docker compose -f docker-compose.full.yml down
-
-# View status
-docker compose -f docker-compose.full.yml ps
-
-# View logs (all services)
-docker compose -f docker-compose.full.yml logs -f
-
-# Restart a specific service
-docker compose -f docker-compose.full.yml restart [service-name]
-
-# Access Django shell
-docker compose -f docker-compose.full.yml exec django python manage.py shell
-
-# Access database
-docker compose -f docker-compose.full.yml exec db psql -U dutchkem -d dutchkem_trading
-```
+- `.env` files are in `.gitignore` and will NOT be pushed to GitHub
+- MT5 credentials are stored locally only
+- Render uses environment variables (encrypted at rest)
+- All production services use SSL/HTTPS
+- JWT tokens expire after 30 minutes
+- Rate limiting: 1000 requests/hour for authenticated users
 
 ---
 
-**Security Notes:**
-- Never commit `.env` files to Git (already in `.gitignore`)
-- Use strong, unique `SECRET_KEY` values
-- Enable `SECURE_SSL_REDIRECT=True` in production
-- Regularly rotate MT5 passwords
-- Monitor trading logs for suspicious activity
+## Support
+
+- **Health Check:** http://localhost:8000/health/ (local) or https://dutchkem-trading-ai.onrender.com/health/ (cloud)
+- **API Documentation:** /api/docs/ endpoint
+- **Logs:** Check Docker logs locally or Render dashboard for cloud
+
+---
+
+*This guide was generated for DutchKEM Trading AI v2.0 with V6.5 self-optimization engine.*
