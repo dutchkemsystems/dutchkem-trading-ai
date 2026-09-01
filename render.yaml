@@ -1,3 +1,12 @@
+# =============================================================================
+# Dutchkem Trading AI — Render Deployment Configuration
+# =============================================================================
+# Updated: 2026-09-01
+# 
+# IMPORTANT: Variables marked with sync: false MUST be set manually in the
+# Render dashboard after deployment. They contain sensitive data.
+# =============================================================================
+
 services:
   # ── Django Web Service ──────────────────────────────────────────────────────
   - type: web
@@ -34,6 +43,12 @@ services:
         value: "5"
       - key: MT5_RETRY_DELAY
         value: "2.0"
+      - key: MT5_LOGIN
+        sync: false
+      - key: MT5_PASSWORD
+        sync: false
+      - key: MT5_SERVER
+        sync: false
       - key: CLOUDINARY_URL
         sync: false
       - key: ALLOWED_HOSTS
@@ -46,6 +61,8 @@ services:
         value: "True"
       - key: CSRF_COOKIE_SECURE
         value: "True"
+      - key: TRADING_MODE
+        value: "full"
     healthCheckPath: /health/
     autoDeploy: true
 
@@ -85,10 +102,18 @@ services:
         value: "5"
       - key: MT5_RETRY_DELAY
         value: "2.0"
+      - key: MT5_LOGIN
+        sync: false
+      - key: MT5_PASSWORD
+        sync: false
+      - key: MT5_SERVER
+        sync: false
       - key: CLOUDINARY_URL
         sync: false
       - key: ALLOWED_HOSTS
         value: dutchkem-trading-ai.onrender.com
+      - key: TRADING_MODE
+        value: "full"
 
   # ── Celery Beat (periodic task scheduler) ───────────────────────────────────
   - type: worker
@@ -126,10 +151,18 @@ services:
         value: "5"
       - key: MT5_RETRY_DELAY
         value: "2.0"
+      - key: MT5_LOGIN
+        sync: false
+      - key: MT5_PASSWORD
+        sync: false
+      - key: MT5_SERVER
+        sync: false
       - key: CLOUDINARY_URL
         sync: false
       - key: ALLOWED_HOSTS
         value: dutchkem-trading-ai.onrender.com
+      - key: TRADING_MODE
+        value: "full"
 
 databases:
   - name: dutchkem-db

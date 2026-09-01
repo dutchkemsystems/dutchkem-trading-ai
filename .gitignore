@@ -21,6 +21,7 @@ frontend/.vite/
 .env
 .env.local
 .env.production
+mt5-bridge/.env
 
 # IDE
 .vscode/
