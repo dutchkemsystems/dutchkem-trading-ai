@@ -57,7 +57,9 @@ logs
 
 # Fly.io
 fly.toml
-fly.frontend.toml
 
 # DevHive
 .devhive
+
+# Deploy scripts
+deploy-fly.ps1

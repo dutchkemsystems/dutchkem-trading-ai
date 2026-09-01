@@ -2,10 +2,12 @@ app = "dutchkem-trading-ai"
 primary_region = "ams"
 
 [build]
-  dockerfile = "backend/Dockerfile.fly"
+  dockerfile = "Dockerfile"
 
 [env]
   DJANGO_SETTINGS_MODULE = "config.settings_production"
+  DEBUG = "0"
+  USE_SQLITE = "0"
   PORT = "8000"
 
 [http_service]

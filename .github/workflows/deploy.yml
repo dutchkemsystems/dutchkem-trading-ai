@@ -2,16 +2,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main, feature/marketing-automation]
+    branches: [main]
   pull_request:
     branches: [main]
-
-env:
-  AWS_REGION: af-south-1
-  ECR_REPOSITORY_API: dutchkem-fortress-api
-  ECR_REPOSITORY_ADMIN: dutchkem-fortress-admin
-  EKS_CLUSTER: fortress-africa
-  NAMESPACE: dutchkem
 
 jobs:
   test:
@@ -27,117 +20,37 @@ jobs:
       - name: Install dependencies
         run: |
           cd backend
-          pip install -e ".[dev]"
+          pip install -r requirements.txt
 
       - name: Lint with ruff
         run: |
           cd backend
-          ruff check app/
+          ruff check .
 
-      - name: Type check with mypy
+      - name: Run Django checks
         run: |
           cd backend
-          mypy app/ --ignore-missing-imports || true
+          python manage.py check --deploy || true
 
-  build-and-push:
+      - name: Run tests
+        run: |
+          cd backend
+          python manage.py test --verbosity 2
+
+  build-and-deploy:
     needs: test
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/marketing-automation'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build and push API image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          cd backend
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_API:$IMAGE_TAG .
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_API:latest .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY_API:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY_API:latest
-
-      - name: Build and push Admin image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          cd frontend
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_ADMIN:$IMAGE_TAG .
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_ADMIN:latest .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY_ADMIN:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY_ADMIN:latest
-
-  deploy-staging:
-    needs: build-and-push
-    if: github.ref == 'refs/heads/feature/marketing-automation'
-    runs-on: ubuntu-latest
-    environment: staging
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Update Kubeconfig
-        run: |
-          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }}-staging --region ${{ env.AWS_REGION }}
-
-      - name: Deploy to staging
-        run: |
-          cd k8s/overlays/staging
-          kustomize edit set image dutchkem/fortress-api=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_API }}:${{ github.sha }}
-          kustomize edit set image dutchkem/fortress-admin=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_ADMIN }}:${{ github.sha }}
-          kubectl apply -k .
-          kubectl rollout status deployment/fortress-api -n ${{ env.NAMESPACE }} --timeout=300s
-
-  deploy-production:
-    needs: build-and-push
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: production
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Update Kubeconfig
+      - name: Build Docker image
         run: |
-          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
+          docker build -t dutchkem-trading-ai:latest -f backend/Dockerfile backend/
 
-      - name: Deploy to production (Africa)
+      - name: Deploy to Render
+        if: env.RENDER_API_KEY != ''
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
-          cd k8s/overlays/production
-          kustomize edit set image dutchkem/fortress-api=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_API }}:${{ github.sha }}
-          kustomize edit set image dutchkem/fortress-admin=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_ADMIN }}:${{ github.sha }}
-          kubectl apply -k .
-          kubectl rollout status deployment/fortress-api -n ${{ env.NAMESPACE }} --timeout=300s
-
-      - name: Verify deployment
-        run: |
-          kubectl get pods -n ${{ env.NAMESPACE }}
-          kubectl get svc -n ${{ env.NAMESPACE }}
+          echo "Deploy triggered — Render auto-deploys from main branch"

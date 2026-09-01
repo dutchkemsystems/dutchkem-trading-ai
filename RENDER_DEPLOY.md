@@ -8,7 +8,7 @@
 
 1. Go to https://dashboard.render.com
 2. Click **"New +"** → **"Web Service"**
-3. Connect your GitHub repo: `dutchkemsystems/dutchkem-fortress-suite`
+3. Connect your GitHub repo: `dutchkemsystems/dutchkem-trading-ai`
 4. Configure:
    - **Name:** `dutchkem-trading-ai`
    - **Runtime:** Python

@@ -5,6 +5,16 @@ from django.conf import settings
 from django.db import models
 
 
+class ThreatLevel(models.IntegerChoices):
+    """Threat severity levels for security events and blocked IPs."""
+    NONE = 0, "None"
+    LOW = 1, "Low"
+    INFO = 2, "Info"
+    MEDIUM = 3, "Medium"
+    HIGH = 4, "High"
+    CRITICAL = 5, "Critical"
+
+
 class BlockedIP(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     ip_address = models.GenericIPAddressField(unique=True, db_index=True)
@@ -19,7 +29,7 @@ class BlockedIP(models.Model):
     is_active = models.BooleanField(default=True)
     blocked_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(null=True, blank=True)
-    threat_level = models.IntegerField(default=3)
+    threat_level = models.IntegerField(choices=ThreatLevel.choices, default=ThreatLevel.HIGH)
 
     class Meta:
         ordering = ["-blocked_at"]
@@ -37,7 +47,7 @@ class BlockedIP(models.Model):
 class SecurityEvent(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     event_type = models.CharField(max_length=100, db_index=True)
-    threat_level = models.IntegerField(default=0)
+    threat_level = models.IntegerField(choices=ThreatLevel.choices, default=ThreatLevel.NONE)
     user_id = models.CharField(max_length=100, blank=True, default="")
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(blank=True, default="")

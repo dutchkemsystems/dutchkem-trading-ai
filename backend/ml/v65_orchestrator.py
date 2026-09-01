@@ -671,7 +671,7 @@ class V65TradingOrchestrator:
             from risk_management.models import DrawdownMonitor
             monitor = DrawdownMonitor.objects.filter(user_id=1).first()
             if monitor:
-                return monitor.current_drawdown / 100.0  # Convert percentage to decimal
+                return float(monitor.drawdown_percent) / 100.0  # Convert percentage to decimal
         except Exception:
             pass
         return 0.02
@@ -685,8 +685,9 @@ class V65TradingOrchestrator:
             from risk_management.models import DrawdownMonitor
             monitor, _ = DrawdownMonitor.objects.get_or_create(user_id=1)
             if monitor.is_circuit_breaker_triggered:
-                logger.warning("Circuit breaker triggered (tier %s) — rejecting trade", monitor.current_tier)
-                return {"approved": False, "reason": "Circuit breaker triggered", "tier": monitor.current_tier}
+                tier_info = monitor.get_drawdown_recovery_tier()
+                logger.warning("Circuit breaker triggered (tier %s) — rejecting trade", tier_info["tier"])
+                return {"approved": False, "reason": "Circuit breaker triggered", "tier": tier_info["tier"]}
         except Exception as e:
             logger.debug("DrawdownMonitor unavailable: %s", e)
 

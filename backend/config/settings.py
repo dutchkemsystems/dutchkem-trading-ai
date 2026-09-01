@@ -268,6 +268,9 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "UTC"
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 
+# Import Celery Beat schedule so `celery beat` (DatabaseScheduler) can populate the DB
+from config.celery_schedule import CELERY_BEAT_SCHEDULE  # noqa: E402, F401
+
 # InfluxDB
 INFLUXDB_URL = os.getenv("INFLUXDB_URL", "http://localhost:8086")
 INFLUXDB_TOKEN = os.getenv("INFLUXDB_TOKEN", "")

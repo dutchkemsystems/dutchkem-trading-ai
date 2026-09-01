@@ -1179,7 +1179,7 @@ def run_v6_trading_cycle(self):
                     Trade.objects.create(
                         user=admin_user,
                         symbol_id=None,  # Will be resolved by symbol name
-                        trade_type=order.get("action", "BUY"),
+                        position_type=order.get("action", "BUY"),
                         volume=order.get("volume", 0.01),
                         stop_loss=order.get("stop_loss", 0),
                         take_profit=order.get("take_profit", 0),

@@ -1,15 +1,18 @@
 services:
   - type: web
     name: dutchkem-trading-ai
-    runtime: python
+    runtime: docker
     plan: free
-    buildCommand: cd backend && pip install -r requirements.txt && python manage.py collectstatic --no-input
-    startCommand: cd backend && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    dockerfilePath: Dockerfile
     envVars:
       - key: DJANGO_SETTINGS_MODULE
         value: config.settings_production
       - key: SECRET_KEY
         generateValue: true
+      - key: DEBUG
+        value: "0"
+      - key: USE_SQLITE
+        value: "0"
       - key: DATABASE_URL
         fromDatabase:
           name: dutchkem-db
@@ -18,6 +21,24 @@ services:
         fromService:
           name: dutchkem-redis
           property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: dutchkem-redis
+          property: connectionString
+      - key: MT5_HOST
+        sync: false
+      - key: MT5_PORT
+        value: "3000"
+      - key: MT5_WS_PORT
+        value: "3001"
+      - key: MT5_TIMEOUT
+        value: "10"
+      - key: MT5_MAX_RETRIES
+        value: "5"
+      - key: MT5_RETRY_DELAY
+        value: "2.0"
+      - key: CLOUDINARY_URL
+        sync: false
       - key: ALLOWED_HOSTS
         value: dutchkem-trading-ai.onrender.com
       - key: CORS_ALLOWED_ORIGINS
