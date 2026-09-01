@@ -86,7 +86,7 @@ Write-Host "  MT5 Bridge:      http://localhost:8082" -ForegroundColor White
 Write-Host ""
 Write-Host "  Trading Mode:    FULL (Automatic)" -ForegroundColor Yellow
 Write-Host "  Trading Cycle:   Every 60 seconds" -ForegroundColor Yellow
-Write-Host "  Active Symbols:  EURUSD, GBPUSD, USDJPY, AUDUSD, XAUUSD" -ForegroundColor Yellow
+Write-Host "  Active Symbols:  28 (Majors, Crosses, Exotics, Metals, Crypto, Indices)" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "  To stop:   docker compose -f docker-compose.full.yml down" -ForegroundColor Gray
 Write-Host "  To logs:   docker compose -f docker-compose.full.yml logs -f" -ForegroundColor Gray

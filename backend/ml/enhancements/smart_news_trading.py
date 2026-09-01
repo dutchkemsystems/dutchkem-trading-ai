@@ -330,8 +330,23 @@ class SmartNewsTrading:
 
     def _get_relevant_events(self, symbol: str, current_time: datetime) -> List[Dict]:
         country_map = {
+            # Majors
             "EURUSD": ["US", "EU"], "GBPUSD": ["US", "UK"], "USDJPY": ["US", "JP"],
-            "XAUUSD": ["US", "EU"], "BTCUSD": ["US", "EU"],
+            "USDCHF": ["US", "CH"], "AUDUSD": ["US", "AU"], "USDCAD": ["US", "CA"],
+            "NZDUSD": ["US", "NZ"],
+            # Crosses
+            "EURGBP": ["EU", "UK"], "EURJPY": ["EU", "JP"], "GBPJPY": ["UK", "JP"],
+            "AUDJPY": ["AU", "JP"], "EURAUD": ["EU", "AU"], "EURCHF": ["EU", "CH"],
+            "GBPCAD": ["UK", "CA"],
+            # Exotics
+            "USDTRY": ["US", "TR"], "USDZAR": ["US", "ZA"], "USDMXN": ["US", "MX"],
+            "USDCNH": ["US", "CN"],
+            # Metals
+            "XAUUSD": ["US", "EU"], "XAGUSD": ["US", "EU"], "XAUEUR": ["EU"],
+            # Crypto
+            "BTCUSD": ["US", "EU"], "ETHUSD": ["US", "EU"], "SOLUSD": ["US", "EU"],
+            # Indices
+            "US30": ["US"], "US500": ["US"], "NAS100": ["US"], "GER40": ["DE"],
         }
         countries = country_map.get(symbol, ["US"])
         return [e for e in self.news_calendar if e["country"] in countries and e["impact"] == "HIGH"]

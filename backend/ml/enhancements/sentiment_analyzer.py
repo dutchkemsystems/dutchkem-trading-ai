@@ -20,11 +20,40 @@ class SentimentAnalyzer:
         self.cache = {}
         self.cache_duration = 300
         self.symbol_keywords = {
+            # Majors
             "EURUSD": ["EUR", "euro", "ECB", "European Central Bank", "Eurozone"],
             "GBPUSD": ["GBP", "pound", "BOE", "Bank of England", "UK"],
             "USDJPY": ["USD", "JPY", "yen", "Fed", "BOJ", "Bank of Japan"],
+            "USDCHF": ["USD", "CHF", "franc", "SNB", "Swiss National Bank"],
+            "AUDUSD": ["AUD", "Aussie", "RBA", "Reserve Bank of Australia"],
+            "USDCAD": ["USD", "CAD", "loonie", "BOC", "Bank of Canada"],
+            "NZDUSD": ["NZD", "kiwi", "RBNZ", "Reserve Bank of New Zealand"],
+            # Crosses
+            "EURGBP": ["EUR", "GBP", "euro pound"],
+            "EURJPY": ["EUR", "JPY", "euro yen"],
+            "GBPJPY": ["GBP", "JPY", "pound yen"],
+            "AUDJPY": ["AUD", "JPY", "aussie yen"],
+            "EURAUD": ["EUR", "AUD", "euro aussie"],
+            "EURCHF": ["EUR", "CHF", "euro franc"],
+            "GBPCAD": ["GBP", "CAD", "pound loonie"],
+            # Exotics
+            "USDTRY": ["USD", "TRY", "lira", "Turkey", "TCMB"],
+            "USDZAR": ["USD", "ZAR", "rand", "South Africa", "SARB"],
+            "USDMXN": ["USD", "MXN", "peso", "Mexico", "Banxico"],
+            "USDCNH": ["USD", "CNH", "yuan", "PBOC", "People's Bank of China"],
+            # Metals
             "XAUUSD": ["gold", "XAU", "precious metals", "gold prices"],
+            "XAGUSD": ["silver", "XAG", "silver prices"],
+            "XAUEUR": ["gold EUR", "XAU", "gold euro"],
+            # Crypto
             "BTCUSD": ["Bitcoin", "BTC", "crypto", "blockchain"],
+            "ETHUSD": ["Ethereum", "ETH", "crypto", "blockchain"],
+            "SOLUSD": ["Solana", "SOL", "crypto", "blockchain"],
+            # Indices
+            "US30": ["Dow Jones", "DJ30", "US30", "wall street"],
+            "US500": ["S&P 500", "SPX", "US500"],
+            "NAS100": ["Nasdaq 100", "NASDAQ", "NAS100", "tech stocks"],
+            "GER40": ["DAX 40", "DAX", "GER40", "Frankfurt"],
         }
 
     def get_sentiment_score(self, symbol: str) -> Dict:

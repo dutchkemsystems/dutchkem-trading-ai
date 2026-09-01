@@ -10,11 +10,18 @@ try:
     ACTIVE_SYMBOLS = list(MarketScanner.DEFAULT_SYMBOLS)
 except ImportError:
     ACTIVE_SYMBOLS = [
-        "EURUSD",
-        "GBPUSD",
-        "USDJPY",
-        "AUDUSD",
-        "XAUUSD",
+        # Majors (7)
+        "EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "USDCAD", "NZDUSD",
+        # Crosses (7)
+        "EURGBP", "EURJPY", "GBPJPY", "AUDJPY", "EURAUD", "EURCHF", "GBPCAD",
+        # Exotics (4)
+        "USDTRY", "USDZAR", "USDMXN", "USDCNH",
+        # Metals (3)
+        "XAUUSD", "XAGUSD", "XAUEUR",
+        # Crypto (3)
+        "BTCUSD", "ETHUSD", "SOLUSD",
+        # Indices (4)
+        "US30", "US500", "NAS100", "GER40",
     ]
 
 # Timeframe → cron interval mapping

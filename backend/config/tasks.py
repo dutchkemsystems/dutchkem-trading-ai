@@ -805,7 +805,18 @@ def run_v6_optimization(self):
         historical_data = []
 
         try:
-            symbols = ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD"]
+            try:
+                from ml.market_scanner import MarketScanner
+                symbols = list(MarketScanner.DEFAULT_SYMBOLS)
+            except ImportError:
+                symbols = [
+                    "EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "USDCAD", "NZDUSD",
+                    "EURGBP", "EURJPY", "GBPJPY", "AUDJPY", "EURAUD", "EURCHF", "GBPCAD",
+                    "USDTRY", "USDZAR", "USDMXN", "USDCNH",
+                    "XAUUSD", "XAGUSD", "XAUEUR",
+                    "BTCUSD", "ETHUSD", "SOLUSD",
+                    "US30", "US500", "NAS100", "GER40",
+                ]
             try:
                 from risk_management.models import TradingSettings
                 ts = TradingSettings.get_active()
@@ -1088,8 +1099,12 @@ def run_v6_trading_cycle(self):
             symbols = list(MarketScanner.DEFAULT_SYMBOLS)
         except ImportError:
             symbols = [
-                "XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD",
-                "USDCAD", "NZDUSD", "USDCHF", "EURGBP", "EURJPY",
+                "EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "USDCAD", "NZDUSD",
+                "EURGBP", "EURJPY", "GBPJPY", "AUDJPY", "EURAUD", "EURCHF", "GBPCAD",
+                "USDTRY", "USDZAR", "USDMXN", "USDCNH",
+                "XAUUSD", "XAGUSD", "XAUEUR",
+                "BTCUSD", "ETHUSD", "SOLUSD",
+                "US30", "US500", "NAS100", "GER40",
             ]
 
         try:

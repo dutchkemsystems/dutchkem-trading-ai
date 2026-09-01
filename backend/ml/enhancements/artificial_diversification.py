@@ -22,24 +22,45 @@ class ArtificialDiversification:
         self.max_sector_exposure = 0.60
 
         self.asset_classes = {
-            "EURUSD": "FOREX", "GBPUSD": "FOREX", "USDJPY": "FOREX", "AUDUSD": "FOREX",
-            "USDCAD": "FOREX", "NZDUSD": "FOREX", "USDCHF": "FOREX", "EURGBP": "FOREX",
-            "EURJPY": "FOREX", "GBPJPY": "FOREX", "AUDJPY": "FOREX",
-            "XAUUSD": "COMMODITY", "XAGUSD": "COMMODITY",
-            "BTCUSD": "CRYPTO", "ETHUSD": "CRYPTO",
+            # Majors
+            "EURUSD": "FOREX", "GBPUSD": "FOREX", "USDJPY": "FOREX", "USDCHF": "FOREX",
+            "AUDUSD": "FOREX", "USDCAD": "FOREX", "NZDUSD": "FOREX",
+            # Crosses
+            "EURGBP": "FOREX", "EURJPY": "FOREX", "GBPJPY": "FOREX", "AUDJPY": "FOREX",
+            "EURAUD": "FOREX", "EURCHF": "FOREX", "GBPCAD": "FOREX",
+            # Exotics
+            "USDTRY": "FOREX_EXOTIC", "USDZAR": "FOREX_EXOTIC", "USDMXN": "FOREX_EXOTIC", "USDCNH": "FOREX_EXOTIC",
+            # Metals
+            "XAUUSD": "COMMODITY", "XAGUSD": "COMMODITY", "XAUEUR": "COMMODITY",
+            # Crypto
+            "BTCUSD": "CRYPTO", "ETHUSD": "CRYPTO", "SOLUSD": "CRYPTO",
+            # Indices
+            "US30": "INDEX", "US500": "INDEX", "NAS100": "INDEX", "GER40": "INDEX",
         }
         self.sectors = {
+            # Majors
             "EURUSD": "MAJORS", "GBPUSD": "MAJORS", "USDJPY": "MAJORS", "USDCHF": "MAJORS",
             "AUDUSD": "COMMODITY_CURRENCIES", "USDCAD": "COMMODITY_CURRENCIES", "NZDUSD": "COMMODITY_CURRENCIES",
+            # Crosses
             "EURGBP": "CROSSES", "EURJPY": "CROSSES", "GBPJPY": "CROSSES", "AUDJPY": "CROSSES",
-            "XAUUSD": "PRECIOUS_METALS", "XAGUSD": "PRECIOUS_METALS",
-            "BTCUSD": "CRYPTO_MAJORS", "ETHUSD": "CRYPTO_MAJORS",
+            "EURAUD": "CROSSES", "EURCHF": "CROSSES", "GBPCAD": "CROSSES",
+            # Exotics
+            "USDTRY": "EXOTICS", "USDZAR": "EXOTICS", "USDMXN": "EXOTICS", "USDCNH": "EXOTICS",
+            # Metals
+            "XAUUSD": "PRECIOUS_METALS", "XAGUSD": "PRECIOUS_METALS", "XAUEUR": "PRECIOUS_METALS",
+            # Crypto
+            "BTCUSD": "CRYPTO_MAJORS", "ETHUSD": "CRYPTO_MAJORS", "SOLUSD": "CRYPTO_MAJORS",
+            # Indices
+            "US30": "INDICES", "US500": "INDICES", "NAS100": "INDICES", "GER40": "INDICES",
         }
         self.correlation_matrix = {
             ("EURUSD", "GBPUSD"): 0.85, ("EURUSD", "USDJPY"): -0.40,
             ("EURUSD", "XAUUSD"): 0.70, ("GBPUSD", "USDJPY"): -0.35,
             ("USDJPY", "XAUUSD"): -0.50, ("XAUUSD", "XAGUSD"): 0.90,
-            ("BTCUSD", "ETHUSD"): 0.80,
+            ("BTCUSD", "ETHUSD"): 0.80, ("ETHUSD", "SOLUSD"): 0.75,
+            ("US30", "US500"): 0.90, ("US500", "NAS100"): 0.92,
+            ("EURGBP", "EURCHF"): 0.60, ("EURJPY", "GBPJPY"): 0.65,
+            ("AUDJPY", "NZDUSD"): 0.55,
         }
 
     def check_diversification(self, symbol: str, open_positions: List[Dict]) -> Dict:

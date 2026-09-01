@@ -891,10 +891,10 @@ class TradingSettings(models.Model):
         help_text="Minimum signal confidence to consider executing (0.0-1.0)",
     )
 
-    # Active symbols
+    # Active symbols — all 28 from MarketScanner.DEFAULT_SYMBOLS
     active_symbols = models.TextField(
-        default="XAUUSD,EURUSD,GBPUSD,USDJPY,AUDUSD,USDCAD,NZDUSD,USDCHF,EURGBP,EURJPY",
-        help_text="Comma-separated list of symbols to trade",
+        default="EURUSD,GBPUSD,USDJPY,USDCHF,AUDUSD,USDCAD,NZDUSD,EURGBP,EURJPY,GBPJPY,AUDJPY,EURAUD,EURCHF,GBPCAD,USDTRY,USDZAR,USDMXN,USDCNH,XAUUSD,XAGUSD,XAUEUR,BTCUSD,ETHUSD,SOLUSD,US30,US500,NAS100,GER40",
+        help_text="Comma-separated list of symbols to trade (all 28 MarketScanner symbols)",
     )
 
     is_active = models.BooleanField(default=True)
