@@ -288,15 +288,34 @@ MT5_TIMEOUT = int(os.getenv("MT5_TIMEOUT", 10))
 MT5_MAX_RETRIES = int(os.getenv("MT5_MAX_RETRIES", 5))
 MT5_RETRY_DELAY = float(os.getenv("MT5_RETRY_DELAY", 2.0))
 
-# Trading Configuration
+# ── V6.5 Trading Engine (DEFAULT — PRIMARY) ─────────────────────────
+TRADING_ENGINE = os.getenv("TRADING_ENGINE", "v6.5")
+V65_ENABLED = os.getenv("V65_ENABLED", "true").lower() in ("true", "1", "yes")
+V65_FALLBACK = os.getenv("V65_FALLBACK", "v6")
+
+# Trading Configuration (V6.5 COMPULSORY — dynamically overridden at runtime)
 TRADING_CONFIG = {
+    # ── Engine Configuration ─────────────────────────────────────────
+    "ENGINE": TRADING_ENGINE,
+    "V65_ENABLED": V65_ENABLED,
+    "V65_FALLBACK": V65_FALLBACK,
+
+    # ── Risk limits ──────────────────────────────────────────────────
     "MAX_DRAWDOWN": 0.15,
     "MAX_DAILY_LOSS": 0.03,
     "MAX_POSITION_SIZE": 0.02,
     "MAX_OPEN_POSITIONS": 5,
     "MAX_CORRELATION": 0.7,
     "MIN_RISK_REWARD_RATIO": 2.0,
-    "TARGET_ANNUAL_GROWTH": 0.40,
+
+    # ── Profit targets (V6.5 determines these dynamically) ───────────
+    "TARGET_DAILY_GROWTH": 0.15,
+    "TARGET_WEEKLY_GROWTH": 1.0,
+    "TARGET_MONTHLY_GROWTH": 4.2,
+    "TARGET_ANNUAL_GROWTH": 50.0,
+    "DAILY_LOSS_LIMIT": 2.0,
+    "MAX_DAILY_TRADES": 10,
+    "PROFIT_TARGET_SOURCE": "V6.5_ORCHESTRATOR",
 }
 
 # Rate Limiting

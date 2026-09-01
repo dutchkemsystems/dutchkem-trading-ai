@@ -2,6 +2,15 @@
 
 **AI-powered forex trading system with MetaTrader 5 integration, signal generation, backtesting, and risk management.**
 
+## Trading Engine: V6.5 (DEFAULT)
+
+V6.5 is the PRIMARY trading engine featuring a comprehensive 16-phase pipeline:
+
+- **Phase 0-16:** Market scanning, AI analysis, sentiment, order flow, pattern recognition, multi-timeframe analysis, risk management, and self-optimization
+- **Backup Systems:** V6 → Gold Edge → Scalping → Confluence Engine
+- **Default Mode:** Semi-auto (requires approval for trades)
+- **Virtual Account:** $100 starting balance available
+
 ## Architecture
 
 ```
@@ -48,6 +57,19 @@ python manage.py migrate
 python manage.py runserver
 ```
 
+## V6.5 Quick Start
+
+```bash
+# Auto-configure V6.5
+powershell -File scripts/configure-v65.ps1 -TradingMode semi -VirtualBalance 100
+
+# Start V6.5 trading system
+powershell -File scripts/start-v65.ps1
+
+# Run virtual $100 simulation
+powershell -File scripts/virtual-100-sim.ps1 -InitialBalance 100 -SimulationDays 30
+```
+
 ## Project Structure
 
 ```
@@ -60,15 +82,23 @@ dutchkem-trading-ai/
 │   ├── gold_edge/         # Gold trading strategy
 │   ├── indicators/        # Technical indicators
 │   ├── market_data/       # Price data ingestion
-│   ├── ml/                # LSTM, regime detection
+│   ├── ml/                # LSTM, regime detection, V6.5 orchestrator
+│   │   ├── v65_orchestrator.py  # V6.5 PRIMARY trading engine
+│   │   ├── v6_orchestrator.py   # V6 fallback
+│   │   └── enhancements/        # V6.5 enhancements (11 modules)
 │   ├── risk_management/   # Position sizing, drawdown
 │   ├── scalping/          # Scalping strategies
 │   ├── signals/           # Trade signal generation
 │   ├── strategies/        # Strategy framework
 │   └── trading/           # Core trading engine
 ├── config/                # Django settings
+├── scripts/               # Deployment & simulation scripts
+│   ├── virtual-100-sim.ps1      # V6.5 $100 simulation
+│   ├── configure-v65.ps1        # V6.5 auto-configuration
+│   └── start-v65.ps1            # V6.5 startup script
+├── docs/
+│   └── V6.5-GUIDE.md     # Complete V6.5 documentation
 ├── strategies/            # External strategy definitions
-├── scripts/               # Deployment scripts
 ├── fly.toml               # Fly.io config
 ├── render.yaml            # Render config
 └── railway.json           # Railway config
@@ -86,6 +116,9 @@ dutchkem-trading-ai/
 | `MT5_PORT` | `8082` | MetaTrader 5 REST port |
 | `MT5_WS_PORT` | `8081` | MetaTrader 5 WebSocket port |
 | `USE_SQLITE` | `1` | Use SQLite instead of PostgreSQL |
+| `TRADING_ENGINE` | `v6.5` | Trading engine (v6.5, v6, gold_edge, scalping) |
+| `TRADING_MODE` | `semi` | Trading mode (manual, semi, full) |
+| `VIRTUAL_ACCOUNT_BALANCE` | `100.0` | Virtual account balance for simulation |
 
 ## Deployment
 

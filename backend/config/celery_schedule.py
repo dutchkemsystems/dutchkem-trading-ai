@@ -93,15 +93,35 @@ STATIC_TASKS = {
         "task": "config.tasks.calculate_performance",
         "schedule": crontab(minute="*/5"),
     },
-    # ── V6 Complete Trading Cycle — runs every 60 seconds ──────────
+    # ── V6.5 Complete Trading Cycle (PRIMARY) — runs every 60 seconds ─
     "run-v6-trading-cycle": {
         "task": "config.tasks.run_v6_trading_cycle",
         "schedule": 60.0,
+    },
+    # ── V6.5 Backup Trading Cycle — runs every 90 seconds ─────────
+    # Handles fallback when V6.5 fails. Uses BackupManager to determine system.
+    "run-backup-trading-cycle": {
+        "task": "config.tasks.run_backup_trading_cycle",
+        "schedule": 90.0,  # Every 90 seconds (offset from main cycle)
     },
     # ── V6.5 Self-Optimization — runs every 24 hours ──────────────
     "run-v6-optimization": {
         "task": "config.tasks.run_v6_optimization",
         "schedule": crontab(minute=0, hour=3),  # 03:00 UTC daily
+    },
+    # ── V6.5 Profit Target Management — runs every 60 seconds ─────
+    # COMPULSORY: V6.5 determines ALL profit targets dynamically.
+    # This task syncs RiskParameter with V6.5 computed targets and
+    # ensures DrawdownMonitor uses V6.5's target values.
+    "v65-manage-profit-targets": {
+        "task": "config.tasks.v65_manage_profit_targets",
+        "schedule": 60.0,  # Every 60 seconds, same as trading cycle
+    },
+    # ── V6.5 Backup System Health Check — runs every 5 minutes ────
+    # Monitors health of all backup trading systems.
+    "check-backup-system-health": {
+        "task": "config.tasks.check_backup_system_health",
+        "schedule": crontab(minute="*/5"),  # Every 5 minutes
     },
 }
 

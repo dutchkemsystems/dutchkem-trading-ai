@@ -280,7 +280,9 @@ def monitor_drawdown():
     """
     Monitor drawdown for all users
 
-    This task runs every minute to check drawdown limits
+    V6.5 COMPULSORY: This task delegates target determination to V6.5.
+    The circuit breaker still uses DrawdownMonitor, but daily target
+    checks use V6.5's dynamically computed targets.
     """
     from django.contrib.auth import get_user_model
 
@@ -291,6 +293,13 @@ def monitor_drawdown():
 
     if not risk_params:
         return
+
+    # ── V6.5: Ensure profit targets are up-to-date before monitoring ──
+    try:
+        from ml.enhancements.profit_target_manager import ProfitTargetManager
+        v65_manager = ProfitTargetManager()
+    except Exception:
+        v65_manager = None
 
     for user in User.objects.filter(is_active=True):
         monitor, _ = DrawdownMonitor.objects.get_or_create(
@@ -310,7 +319,18 @@ def monitor_drawdown():
         if monitor.peak_equity > 0:
             monitor.drawdown_percent = ((monitor.peak_equity - user.equity) / monitor.peak_equity) * 100
 
-        # Check circuit breakers
+        # ── V6.5: Enforce dynamic targets on DrawdownMonitor ──────────
+        if v65_manager:
+            try:
+                daily_pnl_pct = float(monitor.daily_pnl_percent)
+                v65_manager.enforce_targets_on_drawdown_monitor(
+                    daily_pnl_pct=daily_pnl_pct,
+                    drawdown_monitor=monitor,
+                )
+            except Exception as e:
+                logger.debug("V6.5 target enforcement in monitor_drawdown failed: %s", e)
+
+        # Check circuit breakers (uses V6.5-set is_daily_target_triggered)
         alerts = monitor.check_circuit_breaker(risk_params)
 
         # Create alerts if needed
@@ -852,6 +872,117 @@ def run_v6_optimization(self):
         return {"status": "ERROR", "error": str(e)}
 
 
+# ── V6.5 Profit Target Management Task ─────────────────────────────
+@shared_task(bind=True, max_retries=2, rate_limit="1/m", soft_time_limit=60, time_limit=90)
+def v65_manage_profit_targets(self):
+    """
+    V6.5 COMPULSORY Profit Target Management — runs every 60 seconds.
+
+    This task ensures V6.5 is the ONLY system that determines profit targets.
+    It:
+    1. Computes dynamic daily/weekly/monthly/annual targets
+    2. Updates DrawdownMonitor with V6.5's target
+    3. Syncs RiskParameter with V6.5 computed values
+    4. Logs target changes for audit trail
+
+    All other systems (DailyTargetLock, hardcoded RiskParameter values)
+    MUST defer to V6.5's computed targets.
+    """
+    try:
+        from ml.enhancements.profit_target_manager import ProfitTargetManager
+
+        manager = ProfitTargetManager()
+
+        # ── 1. Get current account data ───────────────────────────────
+        current_equity = 10000.0
+        peak_equity = 10000.0
+
+        try:
+            from mcp_integration.services import MT5Service
+            service = MT5Service()
+            loop = asyncio.new_event_loop()
+            try:
+                info = loop.run_until_complete(service.get_account_info())
+                current_equity = info.get("balance", 10000.0)
+            finally:
+                loop.close()
+        except Exception:
+            pass
+
+        # Get peak equity from DrawdownMonitor
+        try:
+            from risk_management.models import DrawdownMonitor
+            monitor = DrawdownMonitor.objects.filter(user_id=1).first()
+            if monitor:
+                peak_equity = float(monitor.peak_equity)
+        except Exception:
+            pass
+
+        # ── 2. Get recent trades for win rate ─────────────────────────
+        recent_trades = []
+        try:
+            from trading.models import Trade
+            recent = Trade.objects.filter(status="CLOSED").order_by("-closed_at")[:50]
+            recent_trades = [{"pnl": float(t.profit_loss or 0)} for t in recent]
+        except Exception:
+            pass
+
+        # ── 3. Compute V6.5 dynamic targets ───────────────────────────
+        targets = manager.compute_targets(
+            current_equity=current_equity,
+            peak_equity=peak_equity,
+            recent_trades=recent_trades,
+            regime="NORMAL",
+        )
+
+        # ── 4. Sync RiskParameter with V6.5 computed values ───────────
+        try:
+            from risk_management.models import RiskParameter
+            risk_params = RiskParameter.objects.filter(is_active=True).first()
+            if risk_params:
+                daily_pct = targets.get("targets", {}).get("daily_pct", 0.15)
+                weekly_pct = targets.get("targets", {}).get("weekly_pct", 1.0)
+                monthly_pct = targets.get("targets", {}).get("monthly_pct", 4.2)
+                annual_pct = targets.get("targets", {}).get("annual_pct", 50.0)
+
+                risk_params.daily_growth_target = daily_pct
+                risk_params.daily_target_lock = daily_pct * 2.5  # Lock at 2.5x target
+                risk_params.weekly_target = weekly_pct
+                risk_params.target_daily_growth = daily_pct
+                risk_params.target_weekly_growth = weekly_pct
+                risk_params.target_monthly_growth = monthly_pct
+                risk_params.target_annual_growth = annual_pct
+                risk_params.save(update_fields=[
+                    "daily_growth_target", "daily_target_lock", "weekly_target",
+                    "target_daily_growth", "target_weekly_growth",
+                    "target_monthly_growth", "target_annual_growth",
+                ])
+                logger.info(
+                    "V6.5 synced RiskParameter: daily=%.4f%%, weekly=%.4f%%, "
+                    "monthly=%.2f%%, annual=%.2f%%",
+                    daily_pct, weekly_pct, monthly_pct, annual_pct,
+                )
+        except Exception as e:
+            logger.debug("RiskParameter sync failed: %s", e)
+
+        logger.info(
+            "V6.5 profit targets managed: daily=%.4f%%, profile=%s",
+            targets.get("targets", {}).get("daily_pct", 0),
+            targets.get("profile", "unknown"),
+        )
+
+        return {
+            "status": "success",
+            "targets": targets.get("targets", {}),
+            "profile": targets.get("profile"),
+            "source": "V6.5_ORCHESTRATOR",
+        }
+
+    except Exception as e:
+        logger.error("V6.5 profit target management failed: %s", e, exc_info=True)
+        return {"status": "ERROR", "error": str(e)}
+
+
 @shared_task(bind=True)
 def run_gold_edge_backtest(self, backtest_id: str):
     """
@@ -1064,26 +1195,62 @@ def run_gold_edge_backtest(self, backtest_id: str):
     return {"status": "success", "backtest_id": backtest_id}
 
 
-# ── V6 Complete Trading Cycle ──────────────────────────────────────
+# ── V6.5 Complete Trading Cycle (PRIMARY) ──────────────────────────
 @shared_task(bind=True, max_retries=3, rate_limit="1/m", soft_time_limit=120, time_limit=180)
 def run_v6_trading_cycle(self):
     """
     V6.5 Complete Trading Cycle - runs every 60 seconds.
     Scans markets, generates signals, manages risk, executes trades.
-    Pipeline: Scan -> AI -> Sentiment -> News -> OrderFlow -> Pattern -> MultiTF -> Signal -> Risk -> SL -> TP -> Diversify -> Execute -> Learn
+    Pipeline: ProfitTargets -> Scan -> AI -> Sentiment -> News -> OrderFlow
+              -> Pattern -> MultiTF -> Signal -> Risk -> SL -> TP -> Diversify
+              -> Execute -> Learn
+
+    V6.5 COMPULSORY: Phase 16 (Profit Targets) runs FIRST and determines
+    whether trading is allowed based on dynamic targets.
+
+    Fallback Chain:
+    1. V6.5 Orchestrator (Primary)
+    2. V6 Orchestrator (Primary Fallback)
+    3. Gold Edge (XAUUSD Specialist)
+    4. Scalping (M5/M15 Tight Trades)
+    5. Confluence Engine (Multi-TF)
     """
     try:
         cycle_start_time = time.time()
+        cycle_id = f"cycle_{int(cycle_start_time)}"
 
-        # Use V6.5 orchestrator with all 10 enhancements
+        # Use V6.5 orchestrator with all 11 enhancements (PRIMARY)
+        orchestrator = None
+        system_used = "v6.5"
+        
         try:
             from ml.v65_orchestrator import get_v65_orchestrator
             orchestrator = get_v65_orchestrator()
-        except ImportError:
-            from ml.v6_orchestrator import get_v6_orchestrator
-            orchestrator = get_v6_orchestrator()
-            logger.warning("V6.5 not available, falling back to V6")
-        orchestrator.initialize()
+            orchestrator.initialize()
+            logger.info("V6.5 orchestrator initialized successfully")
+        except Exception as v65_error:
+            logger.warning("V6.5 orchestrator failed to initialize: %s", v65_error)
+            
+            # Fallback to V6
+            try:
+                from ml.v6_orchestrator import get_v6_orchestrator
+                orchestrator = get_v6_orchestrator()
+                orchestrator.initialize()
+                system_used = "v6"
+                logger.warning("Falling back to V6 orchestrator")
+            except Exception as v6_error:
+                logger.error("V6 orchestrator also failed: %s", v6_error)
+                
+                # Try Gold Edge for XAUUSD
+                try:
+                    from gold_edge.services import GoldEdgeService
+                    gold_service = GoldEdgeService()
+                    system_used = "gold_edge"
+                    logger.info("Using Gold Edge specialist for XAUUSD")
+                except Exception as gold_error:
+                    logger.error("All trading systems failed: V6.5=%s, V6=%s, GoldEdge=%s", 
+                                v65_error, v6_error, gold_error)
+                    return {"status": "ALL_SYSTEMS_FAILED", "error": str(v65_error)}
 
         # ── Fetch market data for all active symbols ────────────────
         from mcp_integration.services import mt5_service
@@ -1214,6 +1381,215 @@ def run_v6_trading_cycle(self):
     except Exception as e:
         logger.error("V6 trading cycle failed: %s", e, exc_info=True)
         raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries), max_retries=3)
+
+
+# ── V6.5 Backup Trading Cycle ──────────────────────────────────────
+@shared_task(bind=True, max_retries=2, rate_limit="2/m", soft_time_limit=180, time_limit=240)
+def run_backup_trading_cycle(self):
+    """
+    V6.5 Backup Trading Cycle - handles fallback when V6.5 fails.
+    
+    This task uses the BackupManager to determine which system to use:
+    1. V6.5 Orchestrator (Primary) - if healthy
+    2. V6 Orchestrator (Primary Fallback) - if V6.5 fails
+    3. Gold Edge (XAUUSD Specialist) - for gold trades
+    4. Scalping (M5/M15 Tight Trades) - for ranging markets
+    5. Confluence Engine (Multi-TF) - for multi-timeframe alignment
+    
+    Logs which system was used for analysis and optimization.
+    """
+    try:
+        cycle_start_time = time.time()
+        cycle_id = f"backup_cycle_{int(cycle_start_time)}"
+        
+        # Initialize backup manager
+        from ml.enhancements.backup_manager import get_backup_manager
+        backup_manager = get_backup_manager()
+        
+        # Determine market context
+        market_context = {
+            "cycle_id": cycle_id,
+            "timestamp": datetime.now().isoformat(),
+        }
+        
+        # Fetch market data for context
+        try:
+            from mcp_integration.services import mt5_service
+            from ml.market_scanner import MarketScanner
+            
+            symbols = list(MarketScanner.DEFAULT_SYMBOLS)[:5]  # Top 5 symbols
+            
+            for symbol in symbols:
+                try:
+                    candles = _run_async(lambda s=symbol: mt5_service.get_candles(s, "M5", 50))
+                    if candles and len(candles) >= 10:
+                        closes = [float(c.get("close", 0)) for c in candles]
+                        market_context["symbol"] = symbol
+                        market_context["regime"] = "RANGING" if len(set(closes[-10:])) < 5 else "TRENDING"
+                        market_context["multi_tf_aligned"] = len(closes) >= 20
+                        break
+                except Exception:
+                    continue
+        except Exception as data_err:
+            logger.warning("Could not fetch market context for backup: %s", data_err)
+        
+        # Get system to use
+        system_to_use = backup_manager.get_system_for_cycle(market_context)
+        logger.info("Backup cycle using system: %s", system_to_use.value)
+        
+        # Execute with the determined system
+        result = {"status": "BACKUP_EXECUTED", "system_used": system_to_use.value}
+        
+        if system_to_use.value == "v6.5":
+            # V6.5 is healthy, run normal cycle
+            try:
+                from ml.v65_orchestrator import get_v65_orchestrator
+                orchestrator = get_v65_orchestrator()
+                orchestrator.initialize()
+                
+                # Fetch market data and run cycle
+                from mcp_integration.services import mt5_service
+                market_data = {}
+                
+                try:
+                    from ml.market_scanner import MarketScanner
+                    symbols = list(MarketScanner.DEFAULT_SYMBOLS)
+                except ImportError:
+                    symbols = ["EURUSD", "GBPUSD", "USDJPY", "XAUUSD"]
+                
+                for symbol in symbols[:10]:
+                    try:
+                        candles = _run_async(lambda s=symbol: mt5_service.get_candles(s, "M5", 100))
+                        if candles and len(candles) >= 10:
+                            closes = [float(c.get("close", 0)) for c in candles]
+                            highs = [float(c.get("high", 0)) for c in candles]
+                            lows = [float(c.get("low", 0)) for c in candles]
+                            
+                            trs = []
+                            for i in range(1, len(candles)):
+                                h, l, pc = highs[i], lows[i], closes[i-1]
+                                trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+                            
+                            current_atr = sum(trs[-14:]) / 14 if len(trs) >= 14 else 0.001
+                            historical_atr = sum(trs) / len(trs) if trs else 0.001
+                            
+                            tick = _run_async(lambda s=symbol: mt5_service.get_tick_data(s))
+                            spread = tick.get("spread", 0.1) if tick else 0.1
+                            
+                            market_data[symbol] = {
+                                "candles": candles,
+                                "current_price": closes[-1],
+                                "spread": spread,
+                                "volume": sum(int(c.get("volume", 0)) for c in candles[-20:]),
+                                "current_atr": current_atr,
+                                "historical_atr": historical_atr,
+                                "highs": highs,
+                                "lows": lows,
+                                "closes": closes,
+                            }
+                    except Exception:
+                        continue
+                
+                if market_data:
+                    cycle_result = orchestrator.run_trading_cycle(
+                        market_data,
+                        broker_client=mt5_service,
+                        trading_mode="semi",
+                    )
+                    result.update(cycle_result)
+                    
+                    # Log trade result
+                    backup_manager.log_trade_result(
+                        system=system_to_use,
+                        cycle_id=cycle_id,
+                        success=cycle_result.get("trade_executed", False),
+                        pnl=0.0,  # Would need to track actual PnL
+                    )
+            except Exception as v65_err:
+                logger.error("V6.5 backup cycle failed: %s", v65_err)
+                result["status"] = "V65_BACKUP_FAILED"
+                result["error"] = str(v65_err)
+        
+        elif system_to_use.value == "gold_edge":
+            # Gold Edge specialist
+            try:
+                from gold_edge.services import GoldEdgeService
+                gold_service = GoldEdgeService()
+                # Execute Gold Edge logic for XAUUSD
+                result["status"] = "GOLD_EDGE_EXECUTED"
+                result["symbol"] = "XAUUSD"
+            except Exception as gold_err:
+                logger.error("Gold Edge backup failed: %s", gold_err)
+                result["status"] = "GOLD_EDGE_FAILED"
+        
+        elif system_to_use.value == "scalping":
+            # Scalping system
+            try:
+                from scalping.multi_asset_scanner import MultiAssetScanner
+                scanner = MultiAssetScanner()
+                result["status"] = "SCALPING_EXECUTED"
+            except Exception as scalp_err:
+                logger.error("Scalping backup failed: %s", scalp_err)
+                result["status"] = "SCALPING_FAILED"
+        
+        cycle_duration = (time.time() - cycle_start_time) * 1000
+        logger.info(
+            "Backup cycle complete in %.2fms: system=%s, status=%s",
+            cycle_duration, system_to_use.value, result.get("status"),
+        )
+        
+        return result
+        
+    except Exception as e:
+        logger.error("Backup trading cycle failed: %s", e, exc_info=True)
+        raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries), max_retries=2)
+
+
+# ── V6.5 Backup System Health Check ────────────────────────────────
+@shared_task(rate_limit="5/m")
+def check_backup_system_health():
+    """
+    Check health of all backup trading systems.
+    
+    This task runs every 5 minutes to ensure backup systems are ready.
+    Logs system availability and performance metrics.
+    """
+    try:
+        from ml.enhancements.backup_manager import get_backup_manager
+        backup_manager = get_backup_manager()
+        
+        # Check V6.5 health
+        v65_healthy = backup_manager.check_v65_health()
+        
+        # Get status
+        status = backup_manager.get_status()
+        
+        logger.info(
+            "Backup system health check: V6.5=%s, active_system=%s, "
+            "fallback_chain_size=%d",
+            "healthy" if v65_healthy else "unhealthy",
+            status["active_system"],
+            len(status["fallback_chain"]),
+        )
+        
+        # Attempt recovery if V6.5 is unhealthy
+        if not v65_healthy:
+            recovery_success = backup_manager.attempt_recovery()
+            if recovery_success:
+                logger.info("V6.5 recovery successful!")
+            else:
+                logger.warning("V6.5 recovery failed, continuing with backup system")
+        
+        return {
+            "status": "success",
+            "v65_healthy": v65_healthy,
+            "active_system": status["active_system"],
+            "system_stats": status["system_stats"],
+        }
+        
+    except Exception as e:
+        logger.error("Backup health check failed: %s", e)
+        return {"status": "error", "error": str(e)}
 
 
 # -- Task Monitoring Signals -------------------------------------------

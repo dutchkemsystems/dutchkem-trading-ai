@@ -305,15 +305,59 @@ KORA_BASE_URL = os.environ.get("KORA_BASE_URL", "https://api.korapay.com/merchan
 KORA_PUBLIC_KEY = os.environ.get("KORA_PUBLIC_KEY", "")
 KORA_WEBHOOK_SECRET = os.environ.get("KORA_WEBHOOK_SECRET", "")
 
+# ── V6.5 Trading Engine (DEFAULT — PRIMARY) ─────────────────────────
+TRADING_ENGINE = os.environ.get("TRADING_ENGINE", "v6.5")
+V65_ENABLED = os.environ.get("V65_ENABLED", "true").lower() in ("true", "1", "yes")
+V65_FALLBACK = os.environ.get("V65_FALLBACK", "v6")
+
 TRADING_CONFIG = {
+    # ── Engine Configuration ─────────────────────────────────────────
+    "ENGINE": TRADING_ENGINE,
+    "V65_ENABLED": V65_ENABLED,
+    "V65_FALLBACK": V65_FALLBACK,
+
+    # ── Risk limits ──────────────────────────────────────────────────
     "MAX_DRAWDOWN": 0.15,
     "MAX_DAILY_LOSS": 0.03,
     "MAX_POSITION_SIZE": 0.02,
     "MAX_OPEN_POSITIONS": 5,
     "MAX_CORRELATION": 0.7,
     "MIN_RISK_REWARD_RATIO": 2.0,
-    "TARGET_ANNUAL_GROWTH": 0.40,
+
+    # ── Profit targets (V6.5 COMPULSORY — dynamically overridden at runtime) ──
+    # These defaults are used only as initial values. V6.5's ProfitTargetManager
+    # determines the actual targets based on win rate, regime, and drawdown.
+    "TARGET_DAILY_GROWTH": 0.15,       # V6.5 default ~0.15%/day
+    "TARGET_WEEKLY_GROWTH": 1.0,       # V6.5 default ~1.0%/week (compounded)
+    "TARGET_MONTHLY_GROWTH": 4.2,      # V6.5 default ~4.2%/month (compounded)
+    "TARGET_ANNUAL_GROWTH": 50.0,      # V6.5 default ~50%/year (compounded)
+    "DAILY_LOSS_LIMIT": 2.0,           # 2% daily loss limit
+    "MAX_DAILY_TRADES": 10,
+
+    # ── V6.5 source marker ───────────────────────────────────────────
+    "PROFIT_TARGET_SOURCE": "V6.5_ORCHESTRATOR",
 }
+
+# ── Trading Engine Configuration ──────────────────────────────────────
+# V6.5 is the PRIMARY trading engine. V6 is the fallback.
+TRADING_ENGINE = os.environ.get("TRADING_ENGINE", "v6.5")
+
+# ── Backup System Configuration ───────────────────────────────────────
+BACKUP_SYSTEMS = {
+    "primary": "v6.5",
+    "fallback_chain": ["v6", "gold_edge", "scalping", "confluence"],
+    "fallback_triggers": {
+        "v6": "v65_failure",
+        "gold_edge": "xauusd_only",
+        "scalping": "scalping_regime",
+        "confluence": "multi_tf_alignment",
+    },
+    "recovery_interval": 300,  # 5 minutes between V6.5 recovery attempts
+}
+
+# ── V6.5 Simulation Mode ─────────────────────────────────────────────
+TRADING_MODE = os.environ.get("TRADING_MODE", "semi")  # Options: manual, semi, full
+VIRTUAL_ACCOUNT_BALANCE = float(os.environ.get("VIRTUAL_ACCOUNT_BALANCE", 100.0))
 
 RATELIMIT_USE_CACHE = "default"
 RATELIMIT_FAIL_OPEN = True
