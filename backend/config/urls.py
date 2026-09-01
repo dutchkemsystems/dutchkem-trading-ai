@@ -104,6 +104,15 @@ All endpoints require JWT authentication unless noted otherwise.
         path("api/v1/eas/", include("expert_advisors.urls")),
         path("api/v1/market/", include("market_data.urls")),
         path("api/v1/notifications/", include("notifications.urls")),
+        path("api/v1/analytics/", include("analytics.urls")),
+        path("api/v1/mcp/", include("mcp_integration.urls")),
+        path("api/v1/referrals/", include("referrals.urls")),
+        path("api/v1/ml/", include("ml.urls")),
+        path("api/v1/backtesting/", include("backtesting.urls")),
+        path("api/v1/gold-edge/", include("gold_edge.urls")),
+        path("api/v1/scalping/", include("scalping.urls")),
+        path("api/v1/infrastructure/", include("infrastructure.urls")),
+        path("api/v1/security/", include("security.urls")),
     ],
 )
 

@@ -13,7 +13,7 @@ pyotp==2.9.0
 qrcode==7.4.2
 
 # Database
-# psycopg2-binary==2.9.9  # Optional: only needed for PostgreSQL
+psycopg2-binary==2.9.9
 dj-database-url==2.2.0
 django-redis==5.4.0
 redis==5.0.1

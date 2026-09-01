@@ -18,19 +18,15 @@ services:
           name: dutchkem-db
           property: connectionString
       - key: REDIS_URL
-        fromService:
-          name: dutchkem-redis
-          property: connectionString
+        sync: false
       - key: CELERY_BROKER_URL
-        fromService:
-          name: dutchkem-redis
-          property: connectionString
+        sync: false
       - key: MT5_HOST
         sync: false
       - key: MT5_PORT
-        value: "3000"
+        value: "443"
       - key: MT5_WS_PORT
-        value: "3001"
+        value: "443"
       - key: MT5_TIMEOUT
         value: "10"
       - key: MT5_MAX_RETRIES
@@ -56,8 +52,4 @@ databases:
   - name: dutchkem-db
     plan: free
     databaseName: dutchkem_trading
-    ipAllowList: []
-
-  - name: dutchkem-redis
-    plan: free
     ipAllowList: []

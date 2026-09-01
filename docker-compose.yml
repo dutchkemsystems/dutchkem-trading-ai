@@ -3,7 +3,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: dutchkem
-      POSTGRES_PASSWORD: fortress
+      POSTGRES_PASSWORD: dutchkem_trading
       POSTGRES_DB: dutchkem_trading
     ports:
       - "5432:5432"
@@ -35,7 +35,7 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings_production
       - USE_SQLITE=0
-      - DATABASE_URL=postgresql://dutchkem:fortress@db:5432/dutchkem_trading
+      - DATABASE_URL=postgresql://dutchkem:dutchkem_trading@db:5432/dutchkem_trading
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - MT5_HOST=host.docker.internal
@@ -63,7 +63,7 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings_production
       - USE_SQLITE=0
-      - DATABASE_URL=postgresql://dutchkem:fortress@db:5432/dutchkem_trading
+      - DATABASE_URL=postgresql://dutchkem:dutchkem_trading@db:5432/dutchkem_trading
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - MT5_HOST=host.docker.internal
@@ -82,7 +82,7 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings_production
       - USE_SQLITE=0
-      - DATABASE_URL=postgresql://dutchkem:fortress@db:5432/dutchkem_trading
+      - DATABASE_URL=postgresql://dutchkem:dutchkem_trading@db:5432/dutchkem_trading
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
     depends_on:
