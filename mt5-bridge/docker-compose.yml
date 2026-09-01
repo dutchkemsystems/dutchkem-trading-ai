@@ -1,20 +1,50 @@
-version: '3.8'
+# =============================================================================
+# Dutchkem Trading AI — MT5 Bridge (Standalone)
+# =============================================================================
+# Standalone MT5 bridge container. For the full stack, use docker-compose.full.yml.
+#
+# Usage:
+#   docker compose up -d
+#   docker compose down
+# =============================================================================
+
 services:
   mt5-bridge:
-    image: synx/mt5-mcp:latest
+    image: ghcr.io/synx-ai/synx-mt5-mcp:latest
     container_name: dutchkem-mt5-bridge
     ports:
-      - "8082:3000"
-      - "8081:3001"
+      - "8082:8082"   # REST API
+      - "8081:8081"   # WebSocket
     environment:
-      - MT5_HOST=host.docker.internal
-      - MT5_PORT=443
+      - MT5_HOST=${MT5_HOST:-host.docker.internal}
+      - MT5_PORT=${MT5_MT5_PORT:-1929}
+      - MT5_LOGIN=${MT5_LOGIN:-}
+      - MT5_PASSWORD=${MT5_PASSWORD:-}
+      - MT5_SERVER=${MT5_SERVER:-}
       - LOG_LEVEL=info
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    restart: unless-stopped
+    volumes:
+      - mt5-data:/app/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: dutchkem-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      mt5-bridge:
+        condition: service_healthy
+    profiles:
+      - tunnel   # Only starts with: docker compose --profile tunnel up
+
+volumes:
+  mt5-data:

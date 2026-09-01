@@ -288,14 +288,16 @@ INFLUXDB_ORG = os.environ.get("INFLUXDB_ORG", "dutchkem")
 INFLUXDB_BUCKET = os.environ.get("INFLUXDB_BUCKET", "trading_data")
 
 MT5_HOST = os.environ.get("MT5_HOST", "localhost")
-MT5_PORT = int(os.environ.get("MT5_PORT", 3000))
-MT5_WS_PORT = int(os.environ.get("MT5_WS_PORT", 3001))
+# NOTE: Docker maps bridge ports 8082:8082 and 8081:8081.
+# Defaults match the external Docker-mapped ports (not internal container ports).
+MT5_PORT = int(os.environ.get("MT5_PORT", 8082))
+MT5_WS_PORT = int(os.environ.get("MT5_WS_PORT", 8081))
 MT5_TIMEOUT = int(os.environ.get("MT5_TIMEOUT", 10))
 MT5_MAX_RETRIES = int(os.environ.get("MT5_MAX_RETRIES", 5))
 MT5_RETRY_DELAY = float(os.environ.get("MT5_RETRY_DELAY", 2.0))
 
 # MT5 MCP Bridge URL (Cloudflare Tunnel endpoint)
-MT5_MCP_URL = os.environ.get("MT5_MCP_URL", "http://localhost:8080")
+MT5_MCP_URL = os.environ.get("MT5_MCP_URL", "http://localhost:8082")
 
 KORA_SECRET_KEY = os.environ.get("KORA_SECRET_KEY", "")
 KORA_ENCRYPTION_KEY = os.environ.get("KORA_ENCRYPTION_KEY", "")

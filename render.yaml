@@ -1,4 +1,5 @@
 services:
+  # ── Django Web Service ──────────────────────────────────────────────────────
   - type: web
     name: dutchkem-trading-ai
     runtime: docker
@@ -47,6 +48,88 @@ services:
         value: "True"
     healthCheckPath: /health/
     autoDeploy: true
+
+  # ── Celery Worker (trading cycles, signals, market data) ────────────────────
+  - type: worker
+    name: dutchkem-celery-worker
+    runtime: docker
+    plan: free
+    dockerfilePath: Dockerfile
+    command: celery -A config.celery worker -l info -Q default,market_data,trading,signals,backtesting --concurrency=4
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings_production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "0"
+      - key: USE_SQLITE
+        value: "0"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: dutchkem-db
+          property: connectionString
+      - key: REDIS_URL
+        sync: false
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: MT5_HOST
+        sync: false
+      - key: MT5_PORT
+        value: "443"
+      - key: MT5_WS_PORT
+        value: "443"
+      - key: MT5_TIMEOUT
+        value: "10"
+      - key: MT5_MAX_RETRIES
+        value: "5"
+      - key: MT5_RETRY_DELAY
+        value: "2.0"
+      - key: CLOUDINARY_URL
+        sync: false
+      - key: ALLOWED_HOSTS
+        value: dutchkem-trading-ai.onrender.com
+
+  # ── Celery Beat (periodic task scheduler) ───────────────────────────────────
+  - type: worker
+    name: dutchkem-celery-beat
+    runtime: docker
+    plan: free
+    dockerfilePath: Dockerfile
+    command: celery -A config.celery beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings_production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "0"
+      - key: USE_SQLITE
+        value: "0"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: dutchkem-db
+          property: connectionString
+      - key: REDIS_URL
+        sync: false
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: MT5_HOST
+        sync: false
+      - key: MT5_PORT
+        value: "443"
+      - key: MT5_WS_PORT
+        value: "443"
+      - key: MT5_TIMEOUT
+        value: "10"
+      - key: MT5_MAX_RETRIES
+        value: "5"
+      - key: MT5_RETRY_DELAY
+        value: "2.0"
+      - key: CLOUDINARY_URL
+        sync: false
+      - key: ALLOWED_HOSTS
+        value: dutchkem-trading-ai.onrender.com
 
 databases:
   - name: dutchkem-db

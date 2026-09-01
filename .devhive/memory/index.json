@@ -1,0 +1,87 @@
+{
+  "version": "1.0",
+  "project": "DUTCHKEM-TRADING-AI",
+  "created_at": "2026-09-01",
+  "entries": [
+    {
+      "id": "sem-001",
+      "type": "semantic",
+      "summary": "Django 4.2 + DRF backend with Python 3.12, using JWT auth, channels for WebSocket, and celery-beat for scheduling",
+      "tags": ["backend", "django", "drf", "celery"],
+      "source": "analyzer",
+      "score": 0.95,
+      "project": "DUTCHKEM-TRADING-AI",
+      "created_at": "2026-09-01"
+    },
+    {
+      "id": "sem-002",
+      "type": "semantic",
+      "summary": "MT5 integration via SYNX-MT5-MCP Docker container exposing REST (8082) and WebSocket (8081) endpoints",
+      "tags": ["mt5", "docker", "integration"],
+      "source": "analyzer",
+      "score": 0.95,
+      "project": "DUTCHKEM-TRADING-AI",
+      "created_at": "2026-09-01"
+    },
+    {
+      "id": "sem-003",
+      "type": "semantic",
+      "summary": "Celery beat schedule uses DatabaseScheduler with dynamic symbol/timeframe tasks and static monitoring tasks",
+      "tags": ["celery", "scheduling", "trading"],
+      "source": "analyzer",
+      "score": 0.9,
+      "project": "DUTCHKEM-TRADING-AI",
+      "created_at": "2026-09-01"
+    },
+    {
+      "id": "sem-004",
+      "type": "semantic",
+      "summary": "Production deployment targets Render with Docker, PostgreSQL, and Redis services",
+      "tags": ["deployment", "render", "docker"],
+      "source": "analyzer",
+      "score": 0.9,
+      "project": "DUTCHKEM-TRADING-AI",
+      "created_at": "2026-09-01"
+    },
+    {
+      "id": "sem-005",
+      "type": "semantic",
+      "summary": "MT5 port inconsistency: settings_production.py defaults to 3000/3001 but Docker maps to 8082/8081",
+      "tags": ["bug", "mt5", "ports", "critical"],
+      "source": "analyzer",
+      "score": 0.98,
+      "project": "DUTCHKEM-TRADING-AI",
+      "created_at": "2026-09-01"
+    },
+    {
+      "id": "sem-006",
+      "type": "semantic",
+      "summary": "render.yaml only defines web service - missing Celery worker and beat services for production",
+      "tags": ["bug", "render", "celery", "critical"],
+      "source": "analyzer",
+      "score": 0.95,
+      "project": "DUTCHKEM-TRADING-AI",
+      "created_at": "2026-09-01"
+    },
+    {
+      "id": "sem-007",
+      "type": "semantic",
+      "summary": "Duplicate MT5 image references: mt5-bridge uses synx/mt5-mcp:latest but setup scripts use ghcr.io/synx-ai/synx-mt5-mcp:latest",
+      "tags": ["bug", "docker", "mt5"],
+      "source": "analyzer",
+      "score": 0.9,
+      "project": "DUTCHKEM-TRADING-AI",
+      "created_at": "2026-09-01"
+    },
+    {
+      "id": "anti-001",
+      "type": "anti_pattern",
+      "summary": "No automated tests configured - no jest.config.js or pytest.ini found",
+      "tags": ["testing", "quality"],
+      "source": "analyzer",
+      "score": 0.8,
+      "project": "DUTCHKEM-TRADING-AI",
+      "created_at": "2026-09-01"
+    }
+  ]
+}
