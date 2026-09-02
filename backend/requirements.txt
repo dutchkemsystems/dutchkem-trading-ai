@@ -56,7 +56,7 @@ tensorflow>=2.15.0
 deap>=1.4.0
 
 # Monitoring
-django-prometheus==2.3.3
+django-prometheus==2.4.1
 prometheus-client>=0.17.0
 
 # Server
