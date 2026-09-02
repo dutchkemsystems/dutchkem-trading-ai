@@ -45,14 +45,13 @@ numpy==1.26.4
 ta==0.11.0
 yfinance==0.2.40
 
-# AI & ML
+# AI & ML (lightweight — no TensorFlow, no CUDA)
 scikit-learn==1.5.1
 xgboost==2.1.1
-# tensorflow>=2.15.0  # DISABLED: too heavy for free tier (512MB RAM). Deep patterns use numpy fallback.
-# torch>=2.0.0  # Optional: very heavy
+# tensorflow disabled: too heavy for free tier
+# torch disabled: too heavy for free tier
 
 # V6: Advanced ML
-# river>=0.21.0  # Optional
 deap>=1.4.0
 
 # Monitoring
@@ -77,12 +76,3 @@ python-json-logger==2.0.7
 # MCP Integration (MT5 async HTTP/WebSocket clients)
 aiohttp>=3.9.0
 websockets>=12.0
-
-# Testing
-pytest>=8.0.0
-pytest-django>=4.8.0
-pytest-asyncio>=0.24.0
-pytest-cov>=5.0.0
-
-# Linting
-ruff>=0.5.0

@@ -7,7 +7,10 @@ import dj_database_url
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Security Settings
-SECRET_KEY = os.environ.get("SECRET_KEY")
+SECRET_KEY = os.environ.get("SECRET_KEY", "CHANGE-ME-in-render-env-vars")
+if SECRET_KEY == "CHANGE-ME-in-render-env-vars":
+    import logging
+    logging.warning("SECRET_KEY is using default placeholder — SET IT IN RENDER ENV VARS!")
 DEBUG = False
 
 # Render / generic: Parse ALLOWED_HOSTS from comma-separated string
@@ -130,11 +133,14 @@ else:
 
 DATABASES = {
     "default": dj_database_url.config(
+        default=os.environ.get("DATABASE_URL", "sqlite:///db.sqlite3"),
         conn_max_age=600,
         conn_health_checks=True,
-        ssl_require=True,
     )
 }
+# Only require SSL for non-SQLite databases
+if DATABASES["default"]["ENGINE"] != "django.db.backends.sqlite3":
+    DATABASES["default"]["OPTIONS"] = {"sslmode": "require"}
 
 # Use Redis cache if available, otherwise fall back to local memory
 if REDIS_URL:
