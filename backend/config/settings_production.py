@@ -13,6 +13,9 @@ if SECRET_KEY == "CHANGE-ME-in-render-env-vars":
     logging.warning("SECRET_KEY is using default placeholder — SET IT IN RENDER ENV VARS!")
 DEBUG = False
 
+# Silence ratelimit cache check — LocMemCache is fine for single-worker free tier
+SILENCED_SYSTEM_CHECKS = ["django_ratelimit.E003", "django_ratelimit.W001"]
+
 # Render / generic: Parse ALLOWED_HOSTS from comma-separated string
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",")
 # Add Render default hostname if not explicitly set
@@ -233,7 +236,7 @@ SIMPLE_JWT = {
     "TOKEN_OBTAIN_SERIALIZER": "accounts.serializers.CustomTokenObtainPairSerializer",
 }
 
-CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
+CORS_ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()]
 # Add Render frontend domain if hostname is set
 if RENDER_EXTERNAL_HOSTNAME:
     backend_url = f"https://{RENDER_EXTERNAL_HOSTNAME}"
@@ -252,7 +255,7 @@ if RAILWAY_PUBLIC_DOMAIN:
         CORS_ALLOWED_ORIGINS.append(railway_backend_url)
 CORS_ALLOW_CREDENTIALS = True
 
-CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
 # Add Render frontend domain if hostname is set
 if RENDER_EXTERNAL_HOSTNAME:
     backend_url = f"https://{RENDER_EXTERNAL_HOSTNAME}"
@@ -361,7 +364,7 @@ BACKUP_SYSTEMS = {
 TRADING_MODE = os.environ.get("TRADING_MODE", "semi")  # Options: manual, semi, full
 VIRTUAL_ACCOUNT_BALANCE = float(os.environ.get("VIRTUAL_ACCOUNT_BALANCE", 10.0))  # $10 micro account default
 
-RATELIMIT_USE_CACHE = "default"
+# RATELIMIT_USE_CACHE removed — rely on FAIL_OPEN when no shared cache available
 RATELIMIT_FAIL_OPEN = True
 
 SECURE_SSL_REDIRECT = True
