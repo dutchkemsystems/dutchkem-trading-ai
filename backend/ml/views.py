@@ -65,8 +65,8 @@ class TrainView(APIView):
 class V6OrchestratorStatusView(APIView):
     """
     GET /api/v1/ml/v6/status/
-    Returns the current status of the V6 Trading Orchestrator,
-    including which components are loaded and available.
+    LEGACY — Returns V6 fallback orchestrator status.
+    Use /api/v1/ml/v65/status/ for the primary V6.5 engine.
     """
 
     permission_classes = [permissions.IsAuthenticated]
@@ -79,14 +79,56 @@ class V6OrchestratorStatusView(APIView):
 
         return Response({
             "v6_status": status_data,
-            "message": "V6 Trading Orchestrator status",
+            "message": "V6 (legacy fallback) Orchestrator status — use /api/v1/ml/v65/status/ for V6.5",
         })
 
 
 class V6CycleView(APIView):
     """
     POST /api/v1/ml/v6/cycle/
-    Manually trigger a V6 trading cycle (admin only).
+    LEGACY — Manually trigger a trading cycle (admin only).
+    The underlying task runs V6.5 with V6 fallback.
+    Use /api/v1/ml/v65/cycle/ for the primary endpoint.
+    """
+
+    permission_classes = [permissions.IsAdminUser]
+
+    def post(self, request):
+        from config.tasks import run_v6_trading_cycle
+
+        task = run_v6_trading_cycle.delay()
+        return Response({
+            "status": "cycle_triggered",
+            "task_id": task.id,
+            "message": "Trading cycle queued (runs V6.5 with fallback)",
+        })
+
+
+class V65OrchestratorStatusView(APIView):
+    """
+    GET /api/v1/ml/v65/status/
+    Returns the current status of the V6.5 Trading Orchestrator (PRIMARY),
+    including which components are loaded and available.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from ml.v65_orchestrator import get_v65_orchestrator
+
+        orchestrator = get_v65_orchestrator()
+        status_data = orchestrator.get_status()
+
+        return Response({
+            "v65_status": status_data,
+            "message": "V6.5 Trading Orchestrator status (PRIMARY engine)",
+        })
+
+
+class V65CycleView(APIView):
+    """
+    POST /api/v1/ml/v65/cycle/
+    Manually trigger a V6.5 trading cycle (admin only).
     Typically runs automatically via Celery every 60s.
     """
 
@@ -99,5 +141,5 @@ class V6CycleView(APIView):
         return Response({
             "status": "cycle_triggered",
             "task_id": task.id,
-            "message": "V6 trading cycle queued",
+            "message": "V6.5 trading cycle queued",
         })

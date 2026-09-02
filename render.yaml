@@ -63,6 +63,10 @@ services:
         value: "True"
       - key: TRADING_MODE
         value: "full"
+      - key: TRADING_ENGINE
+        value: "v6.5"
+      - key: V65_ENABLED
+        value: "true"
     healthCheckPath: /health/
     autoDeploy: true
 
@@ -114,6 +118,10 @@ services:
         value: dutchkem-trading-ai.onrender.com
       - key: TRADING_MODE
         value: "full"
+      - key: TRADING_ENGINE
+        value: "v6.5"
+      - key: V65_ENABLED
+        value: "true"
 
   # ── Celery Beat (periodic task scheduler) ───────────────────────────────────
   - type: worker
@@ -163,6 +171,10 @@ services:
         value: dutchkem-trading-ai.onrender.com
       - key: TRADING_MODE
         value: "full"
+      - key: TRADING_ENGINE
+        value: "v6.5"
+      - key: V65_ENABLED
+        value: "true"
 
 databases:
   - name: dutchkem-db

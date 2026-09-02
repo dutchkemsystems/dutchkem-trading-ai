@@ -296,7 +296,7 @@ python manage.py runserver
 ```bash
 # Via Django admin
 # 1. Go to http://localhost:8000/admin/django_celery_beat/periodictask/
-# 2. Find "run-v6-trading-cycle" task
+# 2. Find "run-v65-trading-cycle" task
 # 3. Uncheck "Enabled" → Save
 ```
 
@@ -322,7 +322,7 @@ docker compose -f docker-compose.yml stop celery-beat
 
 # Or pause only trading cycle
 docker compose -f docker-compose.yml exec celery-worker \
-  celery -A config.celery control cancel run-v6-trading-cycle
+  celery -A config.celery control cancel run-v65-trading-cycle
 ```
 
 #### Stop

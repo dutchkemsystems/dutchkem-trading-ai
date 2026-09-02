@@ -375,7 +375,7 @@ To pause automatic trading without stopping the system:
 
 1. Access Django Admin: http://localhost:8000/admin/ (or Render URL)
 2. Go to **Django Celery Beat** → **Periodic Tasks**
-3. Find **"run-v6-trading-cycle"**
+3. Find **"run-v65-trading-cycle"**
 4. Uncheck **"Enabled"**
 5. Save
 

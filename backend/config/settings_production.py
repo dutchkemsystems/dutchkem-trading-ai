@@ -338,10 +338,6 @@ TRADING_CONFIG = {
     "PROFIT_TARGET_SOURCE": "V6.5_ORCHESTRATOR",
 }
 
-# ── Trading Engine Configuration ──────────────────────────────────────
-# V6.5 is the PRIMARY trading engine. V6 is the fallback.
-TRADING_ENGINE = os.environ.get("TRADING_ENGINE", "v6.5")
-
 # ── Backup System Configuration ───────────────────────────────────────
 BACKUP_SYSTEMS = {
     "primary": "v6.5",

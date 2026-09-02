@@ -210,7 +210,7 @@ if (Test-Path $scheduleFile) {
     $scheduleContent = Get-Content $scheduleFile -Raw
     
     # Verify V6.5 tasks are configured
-    if ($scheduleContent -match "run-v6-trading-cycle" -and 
+    if ($scheduleContent -match "run-v65-trading-cycle" -and 
         $scheduleContent -match "run-backup-trading-cycle" -and
         $scheduleContent -match "v65-manage-profit-targets") {
         Write-Host "  Celery schedule already configured for V6.5" -ForegroundColor Green

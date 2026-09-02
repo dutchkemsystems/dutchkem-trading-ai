@@ -2,7 +2,9 @@ FROM python:3.12-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app/backend
+    PYTHONPATH=/app/backend \
+    TRADING_ENGINE=v6.5 \
+    V65_ENABLED=true
 
 WORKDIR /app
 

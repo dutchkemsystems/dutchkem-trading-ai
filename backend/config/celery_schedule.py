@@ -94,7 +94,7 @@ STATIC_TASKS = {
         "schedule": crontab(minute="*/5"),
     },
     # ── V6.5 Complete Trading Cycle (PRIMARY) — runs every 60 seconds ─
-    "run-v6-trading-cycle": {
+    "run-v65-trading-cycle": {
         "task": "config.tasks.run_v6_trading_cycle",
         "schedule": 60.0,
     },

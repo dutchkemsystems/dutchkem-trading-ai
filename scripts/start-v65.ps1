@@ -116,36 +116,7 @@ if (-not $SkipMigrations) {
 # ── Step 6: Populate Celery beat schedule ────────────────────────────────────
 if (-not $SkipSchedule) {
     Write-Host "[6/7] Populating Celery beat schedule..." -ForegroundColor Yellow
-    $populateScript = @"
-import os, django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings_production')
-django.setup()
-from django_celery_beat.models import PeriodicTask, CrontabSchedule
-# Default trading schedule
-crons = [
-    ('*/5 * * * *', 'Market data ingestion'),
-    ('*/15 * * * *', 'Signal generation cycle'),
-    ('0 * * * *', 'Hourly risk assessment'),
-    ('0 0 * * *', 'Daily performance report'),
-    ('*/1 * * * *', 'V6.5 trading pipeline cycle'),
-]
-for expr, name in crons:
-    parts = expr.split()
-    schedule, _ = CrontabSchedule.objects.get_or_create(
-        minute=parts[0], hour=parts[1],
-        day_of_month=parts[2], month_of_year=parts[3], day_of_week=parts[4]
-    )
-    if not PeriodicTask.objects.filter(name=name).exists():
-        PeriodicTask.objects.create(
-            name=name, task='config.celery.debug_task',
-            crontab=schedule, enabled=True
-        )
-        print(f'  Created: {name} ({expr})')
-    else:
-        print(f'  Exists:  {name}')
-print('Schedule populated.')
-"@
-    docker compose -f docker-compose.yml exec -T django python -c $populateScript 2>&1
+    docker compose -f docker-compose.yml exec -T django python manage.py populate_celery_schedule 2>&1
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  OK: Celery schedule populated" -ForegroundColor Green
     } else {
