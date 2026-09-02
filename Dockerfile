@@ -16,9 +16,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python deps, remove GPU packages
+# Install Python deps (setuptools needed for pkg_resources in drf-yasg)
 COPY backend/requirements.txt backend/requirements.txt
-RUN pip install --no-cache-dir -r backend/requirements.txt \
+RUN pip install --no-cache-dir setuptools \
+    && pip install --no-cache-dir -r backend/requirements.txt \
     ; pip uninstall -y nvidia-nccl-cu12 2>/dev/null || true
 
 # Create logs directory
