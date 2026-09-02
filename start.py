@@ -18,6 +18,9 @@ def main():
     print("=" * 50, flush=True)
     sys.stdout.flush()
 
+    # Ensure logs directory exists
+    os.makedirs("logs", exist_ok=True)
+
     # Migrations
     run("python manage.py migrate --no-input", "migrate")
 

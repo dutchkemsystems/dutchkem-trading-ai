@@ -21,6 +21,9 @@ COPY backend/requirements.txt backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt \
     ; pip uninstall -y nvidia-nccl-cu12 2>/dev/null || true
 
+# Create logs directory
+RUN mkdir -p /app/logs
+
 # Copy app
 COPY backend/ ./backend/
 COPY manage.py ./
