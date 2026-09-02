@@ -19,6 +19,7 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 
 COPY backend/ ./backend/
 COPY manage.py ./
+COPY mt5-bridge/bridge_server.py ./mt5-bridge/bridge_server.py
 
 EXPOSE 8000
 
