@@ -4,7 +4,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app/backend \
     TRADING_ENGINE=v6.5 \
-    V65_ENABLED=true
+    V65_ENABLED=true \
+    WEB_CONCURRENCY=2
 
 WORKDIR /app
 
@@ -23,4 +24,5 @@ COPY mt5-bridge/bridge_server.py ./mt5-bridge/bridge_server.py
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "python manage.py migrate --no-input && python manage.py collectstatic --no-input && gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 4 --timeout 120"]
+# Simple, reliable startup — no shell interpolation issues
+CMD python manage.py migrate --no-input && python manage.py collectstatic --no-input && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 180 --preload
