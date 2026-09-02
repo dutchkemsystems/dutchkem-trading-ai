@@ -46,7 +46,7 @@ class TestSpikeDetector:
         """Large downward price move should detect spike_down."""
         base = 1.1200
         closes = [base + i * 0.0001 for i in range(30)]
-        closes[-1] = base - 0.015  # Huge drop
+        closes[-1] = base - 0.008  # Drop that exceeds 3x ATR but not 5x
 
         data = {
             "close": closes,
