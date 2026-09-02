@@ -272,3 +272,101 @@ class MT5ConnectionView(APIView):
                 "connected": bool(user.mt5_account and user.mt5_server),
             }
         )
+
+
+# ── Multi-Account Management (V6.5) ────────────────────────────────
+
+
+class TradingAccountListView(APIView):
+    """List all trading accounts for the authenticated user."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from .models import TradingAccount
+        accounts = TradingAccount.objects.filter(user=request.user).order_by("-is_primary", "account_type")
+        data = []
+        for a in accounts:
+            data.append({
+                "id": str(a.id),
+                "mt5_login": a.mt5_login,
+                "mt5_server": a.mt5_server,
+                "mt5_name": a.mt5_name,
+                "account_type": a.account_type,
+                "status": a.status,
+                "is_primary": a.is_primary,
+                "balance": float(a.balance),
+                "equity": float(a.equity),
+                "max_lots": a.get_lots_for_balance(),
+                "trading_engine": a.trading_engine,
+                "scaling_threshold": float(a.scaling_threshold),
+                "created_at": a.created_at.isoformat(),
+            })
+        return Response({"accounts": data, "count": len(data)})
+
+
+class TradingAccountCreateView(APIView):
+    """Register a new MT5 trading account for multi-account trading."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        from .models import TradingAccount
+
+        mt5_login = request.data.get("mt5_login")
+        mt5_password = request.data.get("mt5_password")
+        mt5_server = request.data.get("mt5_server")
+        account_type = request.data.get("account_type", "STANDARD")
+        is_primary = request.data.get("is_primary", False)
+
+        if not mt5_login or not mt5_password or not mt5_server:
+            return Response(
+                {"error": "mt5_login, mt5_password, and mt5_server are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        existing = TradingAccount.objects.filter(mt5_login=mt5_login, mt5_server=mt5_server).exists()
+        if existing:
+            return Response(
+                {"error": f"Account {mt5_login}@{mt5_server} is already registered"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        account = TradingAccount.objects.create(
+            user=request.user,
+            mt5_login=mt5_login,
+            mt5_password=mt5_password,
+            mt5_server=mt5_server,
+            account_type=account_type,
+            is_primary=is_primary,
+            trading_engine="v6.5",
+        )
+
+        return Response({
+            "created": True,
+            "account_id": str(account.id),
+            "mt5_login": mt5_login,
+            "account_type": account_type,
+            "is_primary": is_primary,
+            "trading_engine": "v6.5",
+        }, status=status.HTTP_201_CREATED)
+
+
+class TradingAccountPortfolioView(APIView):
+    """Get portfolio summary across all accounts."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from .multi_account_manager import MultiAccountManager
+        mgr = MultiAccountManager()
+        summary = mgr.get_portfolio_summary(request.user.id)
+        return Response(summary)
+
+
+class TradingAccountScaleView(APIView):
+    """Trigger manual scaling check (auto-scaling runs every V6.5 cycle too)."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        from .multi_account_manager import MultiAccountManager
+        mgr = MultiAccountManager()
+        result = mgr.check_and_scale(request.user.id)
+        return Response(result)

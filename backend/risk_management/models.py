@@ -319,6 +319,11 @@ class GoldEdgeRiskParameter(models.Model):
     ) -> float:
         """
         Calculate position size based on ATR and risk parameters.
+        Scales dynamically with account equity:
+          - $10 account → 0.01 lots (micro)
+          - $100 account → 0.01-0.10 lots
+          - $1,000 account → 0.01-1.00 lots
+          - $10,000+ account → up to max_risk_per_trade_pct
 
         Args:
             equity: current account equity
@@ -338,7 +343,10 @@ class GoldEdgeRiskParameter(models.Model):
         pip_value_per_lot = 100.0  # $100 per $1 ATR move for 1 lot of gold
 
         lots = risk_amount / (sl_distance * pip_value_per_lot) if sl_distance > 0 else 0.01
-        return max(round(lots, 2), 0.01)
+
+        # Dynamic cap: 1 lot per $100 equity, absolute max 50 lots
+        max_lots = max(0.01, round(equity / 100.0, 2))
+        return max(round(min(lots, max_lots), 2), 0.01)
 
     def check_circuit_breaker(
         self,

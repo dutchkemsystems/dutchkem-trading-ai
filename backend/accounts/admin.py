@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from .models import LoginHistory, User, UserSession
+from .models import LoginHistory, TradingAccount, User, UserSession
 
 
 @admin.register(User)
@@ -35,3 +35,32 @@ class LoginHistoryAdmin(admin.ModelAdmin):
     list_display = ["user", "ip_address", "status", "created_at"]
     list_filter = ["status"]
     search_fields = ["user__username", "ip_address"]
+
+
+@admin.register(TradingAccount)
+class TradingAccountAdmin(admin.ModelAdmin):
+    list_display = [
+        "mt5_login", "mt5_server", "account_type", "status",
+        "is_primary", "balance", "equity", "trading_engine",
+    ]
+    list_filter = ["account_type", "status", "is_primary", "trading_engine"]
+    search_fields = ["mt5_login", "mt5_server", "mt5_name"]
+    readonly_fields = ["balance", "equity", "last_balance_check", "created_at", "updated_at"]
+
+    fieldsets = (
+        ("MT5 Connection", {
+            "fields": ("user", "mt5_login", "mt5_password", "mt5_server", "mt5_name"),
+        }),
+        ("Account Type", {
+            "fields": ("account_type", "status", "is_primary", "trading_engine"),
+        }),
+        ("Balance", {
+            "fields": ("balance", "equity", "last_balance_check", "last_trade_at"),
+        }),
+        ("Auto-Scaling", {
+            "fields": ("scaling_threshold", "min_balance_after_scaling", "distribution_pct", "max_position_pct"),
+        }),
+        ("Metadata", {
+            "fields": ("created_at", "updated_at"),
+        }),
+    )

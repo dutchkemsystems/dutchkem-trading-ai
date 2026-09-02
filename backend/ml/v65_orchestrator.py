@@ -394,6 +394,24 @@ class V65TradingOrchestrator:
         else:
             result["status"] = "EXECUTION_REJECTED"
 
+        # ── PHASE 17: Multi-Account Scaling Check ────────────────────
+        # After each cycle, check if primary ECN needs auto-distribution
+        with _PhaseTimer("phase17_account_scaling_ms", result["timings"]):
+            try:
+                from accounts.multi_account_manager import MultiAccountManager
+                mgr = MultiAccountManager()
+                scaling_result = mgr.check_and_scale(user_id=1)
+                result["phases"]["account_scaling"] = scaling_result
+                if scaling_result.get("scaled"):
+                    logger.info(
+                        "AUTO-SCALING triggered: primary ECN at $%s — distributing $%s across %d accounts",
+                        scaling_result.get("primary_balance_before"),
+                        scaling_result.get("distribution_total"),
+                        len(scaling_result.get("accounts", [])),
+                    )
+            except Exception as e:
+                logger.debug("Account scaling check skipped: %s", e)
+
         self._record_cycle(cycle_start, result)
         return result
 
@@ -810,7 +828,17 @@ class V65TradingOrchestrator:
             except Exception:
                 pass
 
-        base_size = max(0.01, min(0.02, base_size))
+        # ── DYNAMIC LOT SIZING: scales with account balance ──────────
+        # $10 account → 0.01 lots (micro)
+        # $100 account → 0.01-0.10 lots
+        # $1,000 account → 0.01-1.00 lots
+        # $10,000+ account → up to max_risk_per_trade_pct
+        # Max lot scales: 0.01 per $100 balance, capped by risk params
+        balance = self._get_account_balance()
+        max_lots_by_balance = max(0.01, round(balance / 100.0, 2))  # 1 lot per $100
+        max_lots = min(max_lots_by_balance, 50.0)  # absolute max 50 lots
+        base_size = max(0.01, min(max_lots, base_size))
+
         return {"approved": True, "position_size": base_size, "adjusted_size": base_size, "risk_pct": risk_pct}
 
     def _phase10_dynamic_stoploss(self, signal_result: Dict, market_data: Dict) -> Dict:

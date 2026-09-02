@@ -353,7 +353,7 @@ BACKUP_SYSTEMS = {
 
 # ── V6.5 Simulation Mode ─────────────────────────────────────────────
 TRADING_MODE = os.environ.get("TRADING_MODE", "semi")  # Options: manual, semi, full
-VIRTUAL_ACCOUNT_BALANCE = float(os.environ.get("VIRTUAL_ACCOUNT_BALANCE", 100.0))
+VIRTUAL_ACCOUNT_BALANCE = float(os.environ.get("VIRTUAL_ACCOUNT_BALANCE", 10.0))  # $10 micro account default
 
 RATELIMIT_USE_CACHE = "default"
 RATELIMIT_FAIL_OPEN = True

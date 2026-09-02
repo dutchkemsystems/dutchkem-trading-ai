@@ -19,4 +19,9 @@ urlpatterns = [
     path("sessions/", views.SessionListView.as_view(), name="session_list"),
     path("sessions/<uuid:session_id>/", views.SessionDeleteView.as_view(), name="session_delete"),
     path("mt5/connection/", views.MT5ConnectionView.as_view(), name="mt5_connection"),
+    # Multi-account management (V6.5)
+    path("trading-accounts/", views.TradingAccountListView.as_view(), name="trading_account_list"),
+    path("trading-accounts/create/", views.TradingAccountCreateView.as_view(), name="trading_account_create"),
+    path("trading-accounts/portfolio/", views.TradingAccountPortfolioView.as_view(), name="trading_account_portfolio"),
+    path("trading-accounts/scale/", views.TradingAccountScaleView.as_view(), name="trading_account_scale"),
 ]
