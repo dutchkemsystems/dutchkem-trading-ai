@@ -21,7 +21,10 @@ frontend/.vite/
 .env
 .env.local
 .env.production
+.env.production.local
 mt5-bridge/.env
+*.env
+!*.env.example
 
 # IDE
 .vscode/
@@ -53,6 +56,9 @@ db.sqlite3
 # Reports (generated)
 reports/
 
+# DevHive archive
+.devhive/specs_archive/
+
 # Testing
 .coverage
 htmlcov/
@@ -61,3 +67,5 @@ htmlcov/
 
 # Alembic
 alembic/versions/*.pyc
+.hive/
+.hive2/

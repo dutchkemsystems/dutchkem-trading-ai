@@ -1,6 +1,19 @@
+# =============================================================================
+# Dutchkem Trading AI — Docker Compose
+# =============================================================================
+# Includes ALL services: PostgreSQL, Redis, MT5 Bridge, Django, Celery Worker,
+# Celery Beat. Use for local production testing.
+#
+# Usage:
+#   docker compose up -d
+#   docker compose down
+# =============================================================================
+
 services:
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
   db:
     image: postgres:16-alpine
+    container_name: dutchkem-db
     environment:
       POSTGRES_USER: dutchkem
       POSTGRES_PASSWORD: dutchkem_trading
@@ -15,8 +28,10 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Redis ───────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
+    container_name: dutchkem-redis
     ports:
       - "6379:6379"
     healthcheck:
@@ -25,10 +40,38 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── MT5 Bridge (SYNX-MT5-MCP) ─────────────────────────────────────────────
+  mt5-bridge:
+    image: ghcr.io/synx-ai/synx-mt5-mcp:latest
+    container_name: dutchkem-mt5-bridge
+    ports:
+      - "8082:8082"   # REST API
+      - "8081:8081"   # WebSocket
+    env_file: mt5-bridge/.env
+    environment:
+      - MT5_HOST=host.docker.internal
+      - MT5_PORT=${MT5_MT5_PORT:-1929}
+      - MT5_LOGIN=${MT5_LOGIN:-}
+      - MT5_PASSWORD=${MT5_PASSWORD:-}
+      - MT5_SERVER=${MT5_SERVER:-}
+      - LOG_LEVEL=info
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - mt5-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # ── Django Backend ──────────────────────────────────────────────────────────
   django:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: dutchkem-django
     ports:
       - "8000:8000"
     env_file: .env
@@ -56,10 +99,12 @@ services:
       retries: 3
       start_period: 40s
 
+  # ── Celery Worker ───────────────────────────────────────────────────────────
   celery-worker:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: dutchkem-celery-worker
     command: celery -A config.celery worker -l info -Q default,market_data,trading,signals,backtesting --concurrency=4
     env_file: .env
     environment:
@@ -76,11 +121,14 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    restart: unless-stopped
 
+  # ── Celery Beat (periodic task scheduler) ───────────────────────────────────
   celery-beat:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: dutchkem-celery-beat
     command: celery -A config.celery beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
     env_file: .env
     environment:
@@ -94,7 +142,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   pgdata:
   staticfiles:
+  mt5-data:

@@ -38,6 +38,10 @@ INSTALLED_APPS = [
     "backtesting",
     "gold_edge",
     "audit",
+    "scalping",
+    "infrastructure",
+    "security",
+    "strategies",
 ]
 
 # Use SQLite for testing

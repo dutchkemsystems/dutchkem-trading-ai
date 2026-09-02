@@ -10,8 +10,8 @@
 
 Write-Host "=============================================" -ForegroundColor Cyan
 Write-Host "  DutchKEM Trading AI — Quick Start" -ForegroundColor Cyan
-Write-Host "  MT5 Account: 161704951" -ForegroundColor Cyan
-Write-Host "  Server: Exness-MT5Real21" -ForegroundColor Cyan
+Write-Host "  MT5 Account: $env:MT5_LOGIN" -ForegroundColor Cyan
+Write-Host "  Server: $env:MT5_SERVER" -ForegroundColor Cyan
 Write-Host "  Trading Mode: FULL (Automatic)" -ForegroundColor Cyan
 Write-Host "=============================================" -ForegroundColor Cyan
 Write-Host ""
@@ -30,12 +30,12 @@ try {
 
 # Stop any existing containers
 Write-Host "[2/6] Stopping existing containers..." -ForegroundColor Yellow
-docker compose -f docker-compose.full.yml down 2>$null
+docker compose -f docker-compose.yml down 2>$null
 Write-Host "  Cleaned up" -ForegroundColor Green
 
 # Build and start services
 Write-Host "[3/6] Building and starting services..." -ForegroundColor Yellow
-docker compose -f docker-compose.full.yml up -d --build
+docker compose -f docker-compose.yml up -d --build
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  ERROR: Failed to start services" -ForegroundColor Red
     exit 1
@@ -47,7 +47,7 @@ Write-Host "[4/6] Waiting for services to be healthy..." -ForegroundColor Yellow
 Start-Sleep -Seconds 10
 
 # Check PostgreSQL
-$dbReady = docker compose -f docker-compose.full.yml exec -T db pg_isready -U dutchkem 2>$null
+$dbReady = docker compose -f docker-compose.yml exec -T db pg_isready -U dutchkem 2>$null
 if ($dbReady -match "accepting connections") {
     Write-Host "  PostgreSQL: Ready" -ForegroundColor Green
 } else {
@@ -56,7 +56,7 @@ if ($dbReady -match "accepting connections") {
 }
 
 # Check Redis
-$redisReady = docker compose -f docker-compose.full.yml exec -T redis redis-cli ping 2>$null
+$redisReady = docker compose -f docker-compose.yml exec -T redis redis-cli ping 2>$null
 if ($redisReady -match "PONG") {
     Write-Host "  Redis: Ready" -ForegroundColor Green
 } else {
@@ -66,12 +66,12 @@ if ($redisReady -match "PONG") {
 
 # Run migrations
 Write-Host "[5/6] Running database migrations..." -ForegroundColor Yellow
-docker compose -f docker-compose.full.yml exec -T django python manage.py migrate --no-input 2>$null
+docker compose -f docker-compose.yml exec -T django python manage.py migrate --no-input 2>$null
 Write-Host "  Migrations complete" -ForegroundColor Green
 
 # Collect static files
 Write-Host "[6/6] Collecting static files..." -ForegroundColor Yellow
-docker compose -f docker-compose.full.yml exec -T django python manage.py collectstatic --no-input 2>$null
+docker compose -f docker-compose.yml exec -T django python manage.py collectstatic --no-input 2>$null
 Write-Host "  Static files collected" -ForegroundColor Green
 
 Write-Host ""
@@ -88,6 +88,6 @@ Write-Host "  Trading Mode:    FULL (Automatic)" -ForegroundColor Yellow
 Write-Host "  Trading Cycle:   Every 60 seconds" -ForegroundColor Yellow
 Write-Host "  Active Symbols:  28 (Majors, Crosses, Exotics, Metals, Crypto, Indices)" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "  To stop:   docker compose -f docker-compose.full.yml down" -ForegroundColor Gray
-Write-Host "  To logs:   docker compose -f docker-compose.full.yml logs -f" -ForegroundColor Gray
+Write-Host "  To stop:   docker compose -f docker-compose.yml down" -ForegroundColor Gray
+Write-Host "  To logs:   docker compose -f docker-compose.yml logs -f" -ForegroundColor Gray
 Write-Host "=============================================" -ForegroundColor Green

@@ -142,7 +142,7 @@ This runs ALL services in Docker, identical to production.
 
 ### Manual start
 ```bash
-docker compose -f docker-compose.full.yml up -d
+docker compose -f docker-compose.yml up -d
 ```
 
 ### Stop all services
@@ -158,17 +158,17 @@ docker compose -f docker-compose.full.yml up -d
 ### View logs
 ```bash
 # All services
-docker compose -f docker-compose.full.yml logs -f
+docker compose -f docker-compose.yml logs -f
 
 # Specific service
-docker compose -f docker-compose.full.yml logs -f django
-docker compose -f docker-compose.full.yml logs -f celery-worker
-docker compose -f docker-compose.full.yml logs -f mt5-bridge
+docker compose -f docker-compose.yml logs -f django
+docker compose -f docker-compose.yml logs -f celery-worker
+docker compose -f docker-compose.yml logs -f mt5-bridge
 ```
 
 ### Populate Celery Beat schedule (first time only)
 ```bash
-docker compose -f docker-compose.full.yml exec django python manage.py populate_celery_schedule
+docker compose -f docker-compose.yml exec django python manage.py populate_celery_schedule
 ```
 
 ---
@@ -318,10 +318,10 @@ python manage.py runserver
 #### Pause (pause trading)
 ```bash
 # Pause Celery Beat (stops all periodic tasks)
-docker compose -f docker-compose.full.yml stop celery-beat
+docker compose -f docker-compose.yml stop celery-beat
 
 # Or pause only trading cycle
-docker compose -f docker-compose.full.yml exec celery-worker \
+docker compose -f docker-compose.yml exec celery-worker \
   celery -A config.celery control cancel run-v6-trading-cycle
 ```
 
@@ -371,22 +371,22 @@ Render Dashboard → each service → Suspend
 ### Celery Worker not processing tasks
 1. Check Redis is running:
    ```bash
-   docker compose -f docker-compose.full.yml exec redis redis-cli ping
+   docker compose -f docker-compose.yml exec redis redis-cli ping
    ```
 2. Check worker logs:
    ```bash
-   docker compose -f docker-compose.full.yml logs celery-worker
+   docker compose -f docker-compose.yml logs celery-worker
    ```
 3. Verify Celery Beat schedule is populated:
    ```bash
-   docker compose -f docker-compose.full.yml exec django \
+   docker compose -f docker-compose.yml exec django \
      python manage.py populate_celery_schedule --dry-run
    ```
 
 ### Database connection refused
 1. Check PostgreSQL is running:
    ```bash
-   docker compose -f docker-compose.full.yml exec db pg_isready
+   docker compose -f docker-compose.yml exec db pg_isready
    ```
 2. Verify DATABASE_URL matches:
    ```
@@ -472,11 +472,12 @@ dutchkem-trading-ai/
 │   ├── start-mt5.ps1                # Start MT5 bridge
 │   ├── stop-mt5.ps1                 # Stop MT5 bridge
 │   └── quick-start.ps1              # Quick dev setup
-├── docker-compose.yml               # Basic services (db, redis, django, celery)
-├── docker-compose.full.yml          # Full stack (includes MT5 bridge)
+├── docker-compose.yml               # Full stack (PostgreSQL, Redis, MT5 Bridge, Django, Celery)
 ├── Dockerfile                       # Python 3.12 + gunicorn
 ├── render.yaml                      # Render Blueprint (3 services)
 ├── .env.example                     # Dev environment template
 ├── env.production.example           # Production environment template
-└── DEPLOY.md                        # This file
+├── pyproject.toml                   # pytest + ruff configuration
+├── DEPLOY.md                        # This file
+└── SETUP.md                         # Quick setup guide
 ```

@@ -55,9 +55,9 @@ Write-Host "  OK: .env found" -ForegroundColor Green
 
 # ── Step 3: Start Docker Compose ─────────────────────────────────────────────
 Write-Host "[3/7] Starting Docker Compose stack..." -ForegroundColor Yellow
-$composeFile = Join-Path $ProjectRoot "docker-compose.full.yml"
+$composeFile = Join-Path $ProjectRoot "docker-compose.yml"
 if (-not (Test-Path $composeFile)) {
-    Write-Host "  ERROR: docker-compose.full.yml not found." -ForegroundColor Red
+    Write-Host "  ERROR: docker-compose.yml not found." -ForegroundColor Red
     exit 1
 }
 
@@ -65,7 +65,7 @@ $buildArg = @()
 if ($Build) { $buildArg = @("--build") }
 
 Push-Location $ProjectRoot
-docker compose -f docker-compose.full.yml up -d @buildArg
+docker compose -f docker-compose.yml up -d @buildArg
 $composeExit = $LASTEXITCODE
 Pop-Location
 
@@ -103,7 +103,7 @@ if (-not $allHealthy) {
 # ── Step 5: Run migrations ──────────────────────────────────────────────────
 if (-not $SkipMigrations) {
     Write-Host "[5/7] Running database migrations..." -ForegroundColor Yellow
-    docker compose -f docker-compose.full.yml exec -T django python manage.py migrate --noinput 2>&1
+    docker compose -f docker-compose.yml exec -T django python manage.py migrate --noinput 2>&1
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  OK: Migrations applied" -ForegroundColor Green
     } else {
@@ -145,7 +145,7 @@ for expr, name in crons:
         print(f'  Exists:  {name}')
 print('Schedule populated.')
 "@
-    docker compose -f docker-compose.full.yml exec -T django python -c $populateScript 2>&1
+    docker compose -f docker-compose.yml exec -T django python -c $populateScript 2>&1
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  OK: Celery schedule populated" -ForegroundColor Green
     } else {
@@ -172,7 +172,7 @@ if not settings.active_symbols or settings.active_symbols != symbols:
 else:
     print(f'  Already configured: {len(settings.active_symbols.split(\",\"))} symbols')
 "@
-    docker compose -f docker-compose.full.yml exec -T django python -c $symbolScript 2>&1
+    docker compose -f docker-compose.yml exec -T django python -c $symbolScript 2>&1
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  OK: Symbols initialized" -ForegroundColor Green
     } else {
@@ -187,7 +187,7 @@ Write-Host ""
 Write-Host "=============================================" -ForegroundColor Cyan
 Write-Host "  Service Status" -ForegroundColor Cyan
 Write-Host "=============================================" -ForegroundColor Cyan
-docker compose -f docker-compose.full.yml ps
+docker compose -f docker-compose.yml ps
 Write-Host ""
 
 # ── Summary ──────────────────────────────────────────────────────────────────
@@ -203,7 +203,7 @@ Write-Host "    MT5 Bridge REST: http://localhost:8082" -ForegroundColor Gray
 Write-Host "    MT5 Bridge WS:   ws://localhost:8081" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  Useful commands:" -ForegroundColor White
-Write-Host "    docker compose -f docker-compose.full.yml logs -f django" -ForegroundColor Gray
-Write-Host "    docker compose -f docker-compose.full.yml logs -f celery-worker" -ForegroundColor Gray
-Write-Host "    docker compose -f docker-compose.full.yml down" -ForegroundColor Gray
+Write-Host "    docker compose -f docker-compose.yml logs -f django" -ForegroundColor Gray
+Write-Host "    docker compose -f docker-compose.yml logs -f celery-worker" -ForegroundColor Gray
+Write-Host "    docker compose -f docker-compose.yml down" -ForegroundColor Gray
 Write-Host ""

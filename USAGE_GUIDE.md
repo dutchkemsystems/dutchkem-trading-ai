@@ -1,7 +1,7 @@
 # DutchKEM Trading AI — Complete Usage Guide
 
 > **Generated:** September 1, 2026  
-> **MT5 Account:** 161704951 | **Server:** Exness-MT5Real21  
+> **MT5 Account:** <YOUR_MT5_ACCOUNT> | **Server:** <YOUR_MT5_SERVER>  
 > **Trading Mode:** FULL (Automatic)
 
 ---
@@ -55,7 +55,7 @@ DutchKEM Trading AI is an automated forex/gold trading system with:
 │                              ▼                              │
 │                ┌─────────────────────────────┐               │
 │                │   MetaTrader 5 Terminal     │               │
-│                │   (Exness-MT5Real21)       │               │
+│                │   (<YOUR_MT5_SERVER>)      │               │
 │                └─────────────────────────────┘               │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
@@ -150,9 +150,9 @@ In Docker Desktop:
 
 1. Open MetaTrader 5
 2. Login with:
-   - **Login:** 161704951
-   - **Password:** Christ@5436
-   - **Server:** Exness-MT5Real21
+   - **Login:** <YOUR_MT5_LOGIN>
+   - **Password:** <YOUR_MT5_PASSWORD>
+   - **Server:** <YOUR_MT5_SERVER>
 3. Ensure **"Allow Algo Trading"** is enabled (Tools → Options → Expert Advisors)
 4. Keep MT5 running in the background
 
@@ -162,7 +162,7 @@ Open PowerShell in the project directory and run:
 
 ```powershell
 # Start PostgreSQL, Redis, MT5 Bridge, Django, Celery Worker, Celery Beat
-docker compose -f docker-compose.full.yml up -d
+docker compose -f docker-compose.yml up -d
 ```
 
 This will:
@@ -177,7 +177,7 @@ This will:
 
 ```powershell
 # Check all containers are running
-docker compose -f docker-compose.full.yml ps
+docker compose -f docker-compose.yml ps
 
 # Check Django health
 curl http://localhost:8000/health/
@@ -190,7 +190,7 @@ curl http://localhost:8082/health
 
 ```powershell
 # Access Django shell inside the container
-docker compose -f docker-compose.full.yml exec django python manage.py createsuperuser
+docker compose -f docker-compose.yml exec django python manage.py createsuperuser
 
 # Enter username, email, and password when prompted
 ```
@@ -198,7 +198,7 @@ docker compose -f docker-compose.full.yml exec django python manage.py createsup
 ### Step 4.5: Run Database Migrations
 
 ```powershell
-docker compose -f docker-compose.full.yml exec django python manage.py migrate --no-input
+docker compose -f docker-compose.yml exec django python manage.py migrate --no-input
 ```
 
 ### Step 4.6: Access the System
@@ -215,12 +215,12 @@ docker compose -f docker-compose.full.yml exec django python manage.py migrate -
 
 ```powershell
 # All services
-docker compose -f docker-compose.full.yml logs -f
+docker compose -f docker-compose.yml logs -f
 
 # Specific service
-docker compose -f docker-compose.full.yml logs -f django
-docker compose -f docker-compose.full.yml logs -f celery-worker
-docker compose -f docker-compose.full.yml logs -f mt5-bridge
+docker compose -f docker-compose.yml logs -f django
+docker compose -f docker-compose.yml logs -f celery-worker
+docker compose -f docker-compose.yml logs -f mt5-bridge
 ```
 
 ---
@@ -363,10 +363,10 @@ Trading starts automatically when all services are running. To verify:
 
 ```powershell
 # Check Celery Beat is scheduling tasks
-docker compose -f docker-compose.full.yml logs celery-beat | findstr "v6-trading-cycle"
+docker compose -f docker-compose.yml logs celery-beat | findstr "v6-trading-cycle"
 
 # Check Celery Worker is processing tasks
-docker compose -f docker-compose.full.yml logs celery-worker | findstr "V6 cycle"
+docker compose -f docker-compose.yml logs celery-worker | findstr "V6 cycle"
 ```
 
 ### 6.3: Pause Trading
@@ -385,10 +385,10 @@ To resume: Re-enable the task.
 
 ```powershell
 # Stop all services
-docker compose -f docker-compose.full.yml down
+docker compose -f docker-compose.yml down
 
 # Or stop only the celery worker (keeps web accessible)
-docker compose -f docker-compose.full.yml stop celery-worker celery-beat
+docker compose -f docker-compose.yml stop celery-worker celery-beat
 ```
 
 ### 6.5: Change Trading Mode
@@ -402,7 +402,7 @@ TRADING_MODE=full    # Fully automatic
 
 Then restart:
 ```powershell
-docker compose -f docker-compose.full.yml restart django celery-worker celery-beat
+docker compose -f docker-compose.yml restart django celery-worker celery-beat
 ```
 
 ### 6.6: View Trade History
@@ -448,18 +448,18 @@ curl http://localhost:8082/api/positions
 
 ```powershell
 # Watch all services
-docker compose -f docker-compose.full.yml logs -f
+docker compose -f docker-compose.yml logs -f
 
 # Filter for trading activity
-docker compose -f docker-compose.full.yml logs -f celery-worker | findstr "V6 cycle"
+docker compose -f docker-compose.yml logs -f celery-worker | findstr "V6 cycle"
 
 # Filter for errors
-docker compose -f docker-compose.full.yml logs -f | findstr "ERROR"
+docker compose -f docker-compose.yml logs -f | findstr "ERROR"
 ```
 
 ### 7.2: Celery Flower (Task Monitor)
 
-Add to `docker-compose.full.yml`:
+Add to `docker-compose.yml`:
 ```yaml
   flower:
     image: mher/flower:latest
@@ -515,7 +515,7 @@ On Render, you can:
 2. Check MT5 → Tools → Options → Expert Advisors → "Allow Algo Trading" is enabled
 3. Verify the bridge container can reach the host:
    ```powershell
-   docker compose -f docker-compose.full.yml exec mt5-bridge ping host.docker.internal
+   docker compose -f docker-compose.yml exec mt5-bridge ping host.docker.internal
    ```
 4. Check port 1929 is not blocked by firewall
 
@@ -526,12 +526,12 @@ On Render, you can:
 **Solutions:**
 1. Check Redis is running:
    ```powershell
-   docker compose -f docker-compose.full.yml exec redis redis-cli ping
+   docker compose -f docker-compose.yml exec redis redis-cli ping
    ```
 2. Verify `CELERY_BROKER_URL` is set correctly
 3. Check worker logs:
    ```powershell
-   docker compose -f docker-compose.full.yml logs celery-worker
+   docker compose -f docker-compose.yml logs celery-worker
    ```
 
 ### 8.3: Database Connection Errors
@@ -539,11 +539,11 @@ On Render, you can:
 **Solutions:**
 1. Verify PostgreSQL is healthy:
    ```powershell
-   docker compose -f docker-compose.full.yml exec db pg_isready -U dutchkem
+   docker compose -f docker-compose.yml exec db pg_isready -U dutchkem
    ```
 2. Run migrations:
    ```powershell
-   docker compose -f docker-compose.full.yml exec django python manage.py migrate
+   docker compose -f docker-compose.yml exec django python manage.py migrate
    ```
 
 ### 8.4: Django 502 Errors on Render
@@ -572,31 +572,31 @@ On Render, you can:
 # === LOCAL PRODUCTION ===
 
 # Start everything
-docker compose -f docker-compose.full.yml up -d
+docker compose -f docker-compose.yml up -d
 
 # Stop everything
-docker compose -f docker-compose.full.yml down
+docker compose -f docker-compose.yml down
 
 # Restart everything
-docker compose -f docker-compose.full.yml restart
+docker compose -f docker-compose.yml restart
 
 # View logs
-docker compose -f docker-compose.full.yml logs -f
+docker compose -f docker-compose.yml logs -f
 
 # Check status
-docker compose -f docker-compose.full.yml ps
+docker compose -f docker-compose.yml ps
 
 # Access Django shell
-docker compose -f docker-compose.full.yml exec django python manage.py shell
+docker compose -f docker-compose.yml exec django python manage.py shell
 
 # Run migrations
-docker compose -f docker-compose.full.yml exec django python manage.py migrate
+docker compose -f docker-compose.yml exec django python manage.py migrate
 
 # Create superuser
-docker compose -f docker-compose.full.yml exec django python manage.py createsuperuser
+docker compose -f docker-compose.yml exec django python manage.py createsuperuser
 
 # Collect static files
-docker compose -f docker-compose.full.yml exec django python manage.py collectstatic --no-input
+docker compose -f docker-compose.yml exec django python manage.py collectstatic --no-input
 
 
 # === RENDER CLOUD ===

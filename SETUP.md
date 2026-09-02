@@ -57,7 +57,7 @@ The project includes `render.yaml` for one-click Render deployment:
 4. Set required environment variables in Render dashboard
 5. Deploy
 
-See `DEPLOY_RENDER.md` for detailed steps.
+See `DEPLOY.md` for detailed steps.
 
 ## Environment Variables
 

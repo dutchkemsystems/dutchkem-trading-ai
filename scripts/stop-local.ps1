@@ -27,7 +27,7 @@ Write-Host "  Dutchkem Trading AI — Stopping Local Services" -ForegroundColor 
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host ""
 
-$composeFile = "docker-compose.full.yml"
+$composeFile = "docker-compose.yml"
 if (-not (Test-Path $composeFile)) {
     Fail "$composeFile not found. Run from project root."
     exit 1

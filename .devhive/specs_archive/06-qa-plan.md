@@ -14,7 +14,7 @@
 - [x] Verify Celery beat uses DatabaseScheduler
 
 ### 3. Docker Compose Full Stack
-- [x] Verify docker-compose.full.yml includes all 7 services
+- [x] Verify docker-compose.yml includes all 7 services
 - [x] Verify MT5 bridge uses ghcr.io/synx-ai/synx-mt5-mcp:latest
 - [x] Verify port mappings are correct (8082:8082, 8081:8081)
 - [x] Verify health checks are configured

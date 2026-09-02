@@ -7,7 +7,7 @@
 
 2. **Missing Celery Services on Render**: render.yaml only defined web service. Trading cycle, signal generation, and market data ingestion wouldn't run. **FIXED**: Added worker and beat services.
 
-3. **MT5 Bridge Isolation**: Users had to start MT5 bridge separately with no documentation. **FIXED**: Created docker-compose.full.yml with all services integrated.
+3. **MT5 Bridge Isolation**: Users had to start MT5 bridge separately with no documentation. **FIXED**: Created docker-compose.yml with all services integrated.
 
 4. **Celery Beat Schedule Empty**: DatabaseScheduler was configured but schedule never populated. **FIXED**: Created populate_celery_schedule management command.
 

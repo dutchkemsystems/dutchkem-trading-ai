@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "dutchkem-trading-ai"
+version = "6.5.0"
+description = "AI-powered automated forex trading system"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.test_settings"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--tb=short",
+    "-q",
+    "--no-header",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks integration tests requiring external services",
+]
+testpaths = ["."]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM"]
+ignore = ["E501", "B008", "N806"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["config", "accounts", "trading", "signals", "risk_management",
+                     "ml", "indicators", "payments", "market_data", "notifications",
+                     "analytics", "referrals", "backtesting", "gold_edge", "scalping",
+                     "infrastructure", "security", "strategies", "audit",
+                     "expert_advisors", "mcp_integration"]

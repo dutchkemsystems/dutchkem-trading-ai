@@ -17,6 +17,14 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Install dependencies
         run: |
           cd backend
@@ -30,27 +38,37 @@ jobs:
       - name: Run Django checks
         run: |
           cd backend
-          python manage.py check --deploy || true
+          DJANGO_SETTINGS_MODULE=config.test_settings python manage.py check --deploy
 
-      - name: Run tests
+      - name: Run tests with pytest
         run: |
           cd backend
-          python manage.py test --verbosity 2
+          DJANGO_SETTINGS_MODULE=config.test_settings pytest --tb=short -q
 
-  build-and-deploy:
+  build:
     needs: test
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Build Docker image
         run: |
-          docker build -t dutchkem-trading-ai:latest -f backend/Dockerfile backend/
+          docker build -t dutchkem-trading-ai:latest -f Dockerfile .
 
-      - name: Deploy to Render
+      - name: Test Docker image
+        run: |
+          docker run --rm dutchkem-trading-ai:latest python manage.py check --deploy || true
+
+  deploy-render:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
         if: env.RENDER_API_KEY != ''
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
         run: |
-          echo "Deploy triggered — Render auto-deploys from main branch"
+          echo "Render auto-deploys from main branch push"
+          echo "If auto-deploy is enabled, no action needed"

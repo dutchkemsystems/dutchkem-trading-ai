@@ -6,7 +6,7 @@ Fix all critical deployment issues preventing production operation and provide c
 ## Changes
 1. Fix MT5 port defaults in settings_production.py
 2. Add Celery worker + beat to render.yaml
-3. Create docker-compose.full.yml (7 services)
+3. Create docker-compose.yml (7 services)
 4. Create populate_celery_schedule management command
 5. Standardize MT5 Docker image references
 6. Create DEPLOY.md (482 lines)

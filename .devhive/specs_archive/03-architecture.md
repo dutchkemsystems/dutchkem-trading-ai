@@ -32,7 +32,7 @@
 |------|--------|
 | `backend/config/settings_production.py` | MT5_PORT default 3000→8082, MT5_WS_PORT default 3001→8081 |
 | `render.yaml` | Added worker (celery-worker) and worker (celery-beat) services |
-| `docker-compose.full.yml` | Created with all 7 services including MT5 bridge |
+| `docker-compose.yml` | Created with all 7 services including MT5 bridge |
 | `backend/config/management/commands/populate_celery_schedule.py` | Created management command |
 | `mt5-bridge/docker-compose.yml` | Standardized image to ghcr.io/synx-ai/synx-mt5-mcp:latest |
 | `.env.example` | Updated MT5 ports to 8082/8081, added MT5 credentials |

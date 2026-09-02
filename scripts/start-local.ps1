@@ -45,7 +45,7 @@ if (-not (Test-Path ".env")) {
 }
 
 # ── 3. Set compose file ──────────────────────────────────────────────────────
-$composeFile = "docker-compose.full.yml"
+$composeFile = "docker-compose.yml"
 if (-not (Test-Path $composeFile)) {
     Fail "$composeFile not found. Run from project root."
     exit 1

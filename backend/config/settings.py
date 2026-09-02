@@ -64,6 +64,8 @@ INSTALLED_APPS = [
     "infrastructure",
     # V5: Security Layer
     "security",
+    # V6: Strategies Engine
+    "strategies",
 ]
 
 MIDDLEWARE = [
