@@ -32,6 +32,7 @@ COPY backend/ ./backend/
 COPY manage.py ./
 COPY start.py ./start.py
 COPY supervisord.conf ./supervisord.conf
+COPY create_better_auth_tables.py ./create_better_auth_tables.py
 
 EXPOSE 8000
 
