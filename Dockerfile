@@ -1,19 +1,35 @@
 ﻿FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app/backend \
+    TRADING_ENGINE=v6.5 \
+    V65_ENABLED=true \
+    WEB_CONCURRENCY=1 \
+    PIP_NO_CACHE_DIR=1
+
 WORKDIR /app
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
+
+# System deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
-# STEP 1: Install setuptools FIRST
-RUN pip install --upgrade pip setuptools wheel
-# STEP 2: Copy and install requirements
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-# STEP 3: Copy application
-COPY . .
-# STEP 4: Run migrations and collectstatic
-RUN python manage.py migrate --no-input || echo "Migration skipped"
-RUN python manage.py collectstatic --no-input || echo "Collectstatic skipped"
-# STEP 5: Start Gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:10000", "config.wsgi:application", "--workers", "2", "--timeout", "120"]
+
+# Install Python deps (setuptools for pkg_resources in drf-yasg)
+COPY backend/requirements.txt backend/requirements.txt
+RUN pip install --no-cache-dir -r backend/requirements.txt \
+    ; pip uninstall -y nvidia-nccl-cu12 2>/dev/null || true
+
+# Create logs directory
+RUN mkdir -p /app/logs
+
+# Copy app
+COPY backend/ ./backend/
+COPY manage.py ./
+COPY start.py ./start.py
+
+EXPOSE 8000
+
+# Python entrypoint — zero shell issues, zero CRLF risk
+CMD ["python", "start.py"]
