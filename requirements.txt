@@ -8,3 +8,6 @@ wheel>=0.41.0
 # Database
 psycopg2-binary>=2.9.0
 # Add your other dependencies here
+
+setuptools>=65.0.0
+wheel>=0.41.0
