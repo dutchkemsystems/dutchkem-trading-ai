@@ -49,7 +49,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     "django_filters",
-    "drf_yasg",
+    # drf_yasg removed — broken pkg_resources in Python 3.12-slim
     "channels",
     "django_celery_beat",
     "django_celery_results",
