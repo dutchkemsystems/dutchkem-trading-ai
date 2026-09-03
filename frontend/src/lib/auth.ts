@@ -9,9 +9,4 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
   },
-  advanced: {
-    database: {
-      generateId: false,
-    },
-  },
 });
