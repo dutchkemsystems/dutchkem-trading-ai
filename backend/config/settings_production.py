@@ -82,8 +82,9 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-    "security.waf.WAFMiddleware",
-    "security.zero_trust.ZeroTrustMiddleware",
+    # WAF + Zero Trust disabled until security tables are populated
+    # "security.waf.WAFMiddleware",
+    # "security.zero_trust.ZeroTrustMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
