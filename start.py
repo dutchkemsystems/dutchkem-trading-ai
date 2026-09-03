@@ -1,4 +1,4 @@
-"""Startup script — avoids all shell/CRLF issues on Windows builds."""
+"""Startup script — runs migrations, collectstatic, then launches supervisord."""
 import os
 import subprocess
 import sys
@@ -14,7 +14,7 @@ def run(cmd, label):
 
 def main():
     print("=" * 50, flush=True)
-    print("  Dutchkem Trading AI — Starting", flush=True)
+    print("  Dutchkem Trading AI — Starting (All-in-One)", flush=True)
     print("=" * 50, flush=True)
     sys.stdout.flush()
 
@@ -27,20 +27,9 @@ def main():
     # Static files
     run("python manage.py collectstatic --no-input", "collectstatic")
 
-    # Gunicorn — use os.execvp to replace this process
-    port = os.environ.get("PORT", "8000")
-    workers = os.environ.get("WEB_CONCURRENCY", "1")
-    args = [
-        "gunicorn", "config.wsgi:application",
-        "--bind", f"0.0.0.0:{port}",
-        "--workers", workers,
-        "--timeout", "180",
-        "--preload",
-        "--access-logfile", "-",
-        "--error-logfile", "-",
-    ]
-    print(f"[gunicorn] {' '.join(args)}", flush=True)
-    os.execvp("gunicorn", args)
+    # Launch supervisord (Django + Celery Worker + Celery Beat)
+    print("[supervisord] Starting all services...", flush=True)
+    os.execvp("supervisord", ["supervisord", "-c", "/app/supervisord.conf"])
 
 
 if __name__ == "__main__":

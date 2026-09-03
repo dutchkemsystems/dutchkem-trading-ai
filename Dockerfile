@@ -5,7 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app/backend \
     TRADING_ENGINE=v6.5 \
     V65_ENABLED=true \
-    WEB_CONCURRENCY=1 \
+    WEB_CONCURRENCY=2 \
     PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
@@ -21,6 +21,9 @@ COPY backend/requirements.txt backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt \
     ; pip uninstall -y nvidia-nccl-cu12 2>/dev/null || true
 
+# Install supervisor (process manager for all services)
+RUN pip install --no-cache-dir supervisor
+
 # Create logs directory
 RUN mkdir -p /app/logs
 
@@ -28,8 +31,9 @@ RUN mkdir -p /app/logs
 COPY backend/ ./backend/
 COPY manage.py ./
 COPY start.py ./start.py
+COPY supervisord.conf ./supervisord.conf
 
 EXPOSE 8000
 
-# Python entrypoint — zero shell issues, zero CRLF risk
+# Entry point: runs migrations, collectstatic, then supervisord
 CMD ["python", "start.py"]
