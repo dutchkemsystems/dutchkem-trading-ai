@@ -1,10 +1,9 @@
 ﻿#!/bin/bash
-# render-build.sh — Fix for pkg_resources error
-set -e
+# Render Build Script — Fix for pkg_resources error
 echo "🔧 Installing setuptools first..."
 pip install --upgrade pip setuptools wheel
 echo "📦 Installing requirements..."
-pip install -r requirements.txt
+pip install --no-cache-dir -r requirements.txt
 echo "📋 Running migrations..."
 python manage.py migrate --no-input || echo "Migration skipped"
 echo "📁 Collecting static files..."
