@@ -1,3 +1,6 @@
+# System (Python 3.12 slim doesn't include pkg_resources)
+setuptools>=70.0.0
+
 # Django Core
 Django==4.2.20
 djangorestframework==3.15.2
