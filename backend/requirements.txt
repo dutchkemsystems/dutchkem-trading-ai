@@ -59,7 +59,7 @@ deap>=1.4.0
 
 # Monitoring
 django-prometheus==2.4.1
-prometheus-client>=0.17.0
+prometheus-client>=0.26.0
 
 # Server
 gunicorn==22.0.0
