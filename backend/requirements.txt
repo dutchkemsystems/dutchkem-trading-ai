@@ -19,7 +19,7 @@ qrcode==7.4.2
 psycopg2-binary==2.9.9
 dj-database-url==2.2.0
 django-redis==7.0.0
-redis==5.0.1
+redis==8.1.0
 
 # Celery
 celery==5.4.0
