@@ -78,4 +78,4 @@ python-json-logger==2.0.7
 
 # MCP Integration (MT5 async HTTP/WebSocket clients)
 aiohttp>=3.9.0
-websockets>=12.0
+websockets>=17.2
