@@ -1,7 +1,7 @@
-﻿# Core Django
+# Core Django
 Django>=4.2.0
 djangorestframework>=3.14.0
-drf-yasg>=1.21.0
+drf-yasg>=1.21.17
 # Fix for pkg_resources error
 setuptools>=65.0.0
 wheel>=0.41.0
