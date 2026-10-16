@@ -63,7 +63,7 @@ prometheus-client>=0.26.0
 
 # Server
 gunicorn==22.0.0
-whitenoise==6.7.0
+whitenoise==6.12.0
 
 # Infrastructure (V4 Resiliency)
 psutil>=5.9.0
